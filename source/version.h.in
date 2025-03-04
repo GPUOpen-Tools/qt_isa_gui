@@ -1,0 +1,24 @@
+//=============================================================================
+// Copyright (c) 2024 Advanced Micro Devices, Inc. All rights reserved.
+/// @author AMD Developer Tools Team
+/// @file
+/// @brief QtIsaGui version header
+//=============================================================================
+
+#ifndef QTISAGUI_VERSION_H_
+#define QTISAGUI_VERSION_H_
+
+#define STRINGIFY_MACRO_(a) #a
+#define STRINGIFY_MACRO(a) STRINGIFY_MACRO_(a)
+#define STRINGIFY_VERSION(major, minor, patch, build) STRINGIFY_MACRO(v) STRINGIFY_MACRO(major) "." STRINGIFY_MACRO(minor) "." STRINGIFY_MACRO(patch) "." STRINGIFY_MACRO(build)
+
+#define QTISAGUI_MAJOR_VERSION @QTISAGUI_MAJOR_VERSION@  ///< Major version number.
+#define QTISAGUI_MINOR_VERSION @QTISAGUI_MINOR_VERSION@  ///< Minor version number.
+#define QTISAGUI_PATCH_NUMBER  @QTISAGUI_PATCH_NUMBER@   ///< Patch number.
+#define QTISAGUI_BUILD_NUMBER  @QTISAGUI_BUILD_NUMBER@   ///< Build number.
+#define QTISAGUI_BUILD_SUFFIX  @QTISAGUI_BUILD_SUFFIX@   ///< Build suffix
+#define QTISAGUI_BUILD_DATE_STRING @DATE@
+#define QTISAGUI_BUILD_YEAR @YEAR@
+#define QTISAGUI_VERSION STRINGIFY_VERSION(QTISAGUI_MAJOR_VERSION, QTISAGUI_MINOR_VERSION, QTISAGUI_PATCH_NUMBER, QTISAGUI_BUILD_NUMBER)
+
+#endif
