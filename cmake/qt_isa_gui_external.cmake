@@ -1,3 +1,8 @@
+#######################################################################################################################
+### Copyright (c) 2024-2025 Advanced Micro Devices, Inc. All rights reserved.
+### @author AMD Developer Tools Team
+#######################################################################################################################
+
 include(FetchContent)
 
 set (GITHUB_REPO_PREFIX "git@github.com:GPUOpen-Tools")
