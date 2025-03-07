@@ -5,7 +5,7 @@
 
 include(FetchContent)
 
-set (GITHUB_REPO_PREFIX "git@github.com:GPUOpen-Tools")
+set (GITHUB_REPO_PREFIX "https://github.com/GPUOpen-Tools")
 set (QT_COMMON_BRANCH "v4.2.0")
 set (ISA_SPEC_MANAGER_BRANCH "v1.1.0")
 
