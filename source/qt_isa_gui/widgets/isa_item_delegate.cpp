@@ -80,11 +80,20 @@ IsaItemDelegate::IsaItemDelegate(IsaTreeView* view, QObject* parent)
     , mouse_over_token_index_(-1)
     , tooltip_(nullptr)
 {
-    tooltip_ = new IsaTooltip(view);
+    tooltip_ = new IsaTooltip(view, view->viewport());
+
+    // Force hide the tooltip if the tree view is scrolled.
+    connect(view_->horizontalScrollBar(), &QScrollBar::valueChanged, this, [this]() { tooltip_->hide(); });
+    connect(view_->verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() { tooltip_->hide(); });
 }
 
 IsaItemDelegate::~IsaItemDelegate()
 {
+}
+
+void IsaItemDelegate::RegisterScrollAreas(std::vector<QScrollArea*> container_scroll_areas)
+{
+    tooltip_->RegisterScrollAreas(container_scroll_areas);
 }
 
 bool IsaItemDelegate::editorEvent(QEvent* event, QAbstractItemModel* model, const QStyleOptionViewItem& option, const QModelIndex& index)
@@ -149,7 +158,7 @@ bool IsaItemDelegate::editorEvent(QEvent* event, QAbstractItemModel* model, cons
                         QModelIndex source_branch_label_index = branch_label_indices.front();
 
                         // Label is only referenced by 1 branch instruction to just scroll to it right away.
-                        view_->ScrollToIndex(source_branch_label_index, true, true);
+                        view_->ScrollToIndex(source_branch_label_index, true, true, true);
                     }
 
                     // Stop processing the mouse release and scroll to the 1st corresponding label instead.
@@ -160,7 +169,7 @@ bool IsaItemDelegate::editorEvent(QEvent* event, QAbstractItemModel* model, cons
                     QModelIndex source_branch_label_index = branch_label_indices.front();
 
                     // Stop processing the mouse release and scroll to the 1st corresponding label instead.
-                    view_->ScrollToIndex(source_branch_label_index, true, true);
+                    view_->ScrollToIndex(source_branch_label_index, true, true, true);
                     return true;
                 }
             }
@@ -610,7 +619,6 @@ void IsaItemDelegate::TooltipTimerCallback()
     {
         // The current position of the mouse is close enough, so show the tooltip.
 
-
         const QVariant data = tooltip_timeout_source_index_.data(IsaItemModel::UserRoles::kDecodedIsa);
         if (data.isValid())
         {
@@ -878,6 +886,9 @@ void IsaItemDelegate::PaintTokenHighlight(const IsaItemModel::Token& token,
         }
     }
 
+    // Use the same color for light and dark mode.
+    const auto token_highlight_color = kIsaLightThemeColorLightPink;
+
     if (is_token_selected)
     {
         // This token matches the currently selected token so highlight it.
@@ -885,17 +896,7 @@ void IsaItemDelegate::PaintTokenHighlight(const IsaItemModel::Token& token,
         QRectF highlighted_operand_rectangle = isa_token_rectangle;
         highlighted_operand_rectangle.setWidth(font_metrics.horizontalAdvance(token.token_text.c_str()));
 
-        QColor higlight_color;
-        if (QtCommon::QtUtils::ColorTheme::Get().GetColorTheme() == kColorThemeTypeLight)
-        {
-            higlight_color = kIsaLightThemeColorLightPink;
-        }
-        else
-        {
-            higlight_color = kIsaDarkThemeColorDarkDarkPurple;
-        }
-
-        painter->fillRect(highlighted_operand_rectangle, higlight_color);
+        painter->fillRect(highlighted_operand_rectangle, token_highlight_color);
     }
     else if (mouse_over_isa_token_.token_text == token.token_text && code_block_index == mouse_over_code_block_index_ &&
              instruction_index == mouse_over_instruction_index_ && mouse_over_token_index_ == token_index)
@@ -905,17 +906,7 @@ void IsaItemDelegate::PaintTokenHighlight(const IsaItemModel::Token& token,
         QRectF highlighted_token_rectangle = isa_token_rectangle;
         highlighted_token_rectangle.setWidth(font_metrics.horizontalAdvance(token.token_text.c_str()));
 
-        QColor higlight_color;
-        if (QtCommon::QtUtils::ColorTheme::Get().GetColorTheme() == kColorThemeTypeLight)
-        {
-            higlight_color = kIsaLightThemeColorLightPink;
-        }
-        else
-        {
-            higlight_color = kIsaDarkThemeColorDarkDarkPurple;
-        }
-
-        painter->fillRect(highlighted_token_rectangle, higlight_color);
+        painter->fillRect(highlighted_token_rectangle, token_highlight_color);
     }
 }
 

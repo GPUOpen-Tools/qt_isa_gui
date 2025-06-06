@@ -10,8 +10,10 @@
 
 #include <deque>
 #include <list>
+#include <memory>
 
 #include <QModelIndex>
+#include <QScrollArea>
 #include <QTimer>
 #include <QValidator>
 #include <QWidget>
@@ -46,11 +48,21 @@ public:
     ///
     /// Use this function to override the default models and views and use your own instead.
     ///
-    /// @param [in] navigation_widget_parent The widget to set as a parent of the navigation widget's combo box.
+    /// @param [in] navigation_widget_parent The widget to set as the parent of the navigation widget combo box.
     /// @param [in] isa_model                The isa item model.
     /// @param [in] isa_view                 The optional isa tree view.
     /// @param [in] proxy_model              The optional proxy model.
-    void SetModelAndView(QWidget* navigation_widget_parent, IsaItemModel* isa_model, IsaTreeView* isa_view = nullptr, IsaProxyModel* proxy_model = nullptr);
+    void SetModelAndView(QWidget*       navigation_widget_parent,
+                         IsaItemModel*  isa_model,
+                         IsaTreeView*   isa_view    = nullptr,
+                         IsaProxyModel* proxy_model = nullptr);
+
+    /// @brief Remember any scroll areas that should affect the isa tooltip's visibility.
+    ///
+    /// If the tooltip leaves the geometry of a given scroll area the tooltip should be hidden.
+    ///
+    /// @param [in] container_scroll_areas The scroll areas to remember.
+    void RegisterScrollAreas(std::vector<QScrollArea*> container_scroll_areas);
 
     /// @brief Expand or collapse all isa blocks in the tree view in this widget.
     ///
@@ -244,10 +256,10 @@ private:
         int line_count_;  ///< Line count cache.
     };
 
-    Ui::IsaWidget* ui_;           ///< The Qt ui form.
-    IsaProxyModel* proxy_model_;  ///< Internal proxy model to assist hiding columns.
+    std::unique_ptr<Ui::IsaWidget> ui_;                    ///< The Qt ui form.
+    std::unique_ptr<IsaProxyModel> proxy_model_;           ///< Internal proxy model to assist hiding columns.
+    std::unique_ptr<LineValidator> go_to_line_validator_;  ///< Validate input to the 'Go To Line' line edit.
 
-    LineValidator*  go_to_line_validator_;     ///< Validate input to the 'Go To Line' line edit.
     QTimer          search_timer_;             ///< Search delay timer.
     QModelIndexList matches_;                  ///< Cache of list of matches from find query.
     int             find_index_;               ///< Cache of current find selection index.

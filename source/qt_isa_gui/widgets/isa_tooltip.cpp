@@ -7,14 +7,6 @@
 
 #include "isa_tooltip.h"
 
-#ifdef Q_OS_LINUX
-#include <QApplication>
-#endif
-#include <QGuiApplication>
-#ifdef Q_OS_LINUX
-#include <QMainWindow>
-#endif
-#include <QScreen>
 #include <QSizePolicy>
 #include <QString>
 
@@ -25,38 +17,19 @@
 
 namespace
 {
-    static const int     kMousePositionBuffer = 15;   ///< Position tooltips in front of the mouse.
-    static const int     kMaxTooltipWidth     = 500;  ///< Maximum pixel width for the tooltip label.
-    static const int     kTooltipBorderWidth  = 1;    ///< Border around the tooltip to distinguish it from what's behind it.
-    static const int     kTooltipMargin       = 2;    ///< Margin for the tooltip to give some space between its contents and the border.
-    static const QString kTooltipStylesheet   = QString("IsaTooltip > QWidget#background_widget_ { border: %1px solid palette(text); }")
-                                                  .arg(QString::number(kTooltipBorderWidth));  ///< Make border match color theme.
+    static const int kMaxTooltipWidth = 500;  ///< Maximum pixel width for the tooltip label.
 }  // namespace
 
-IsaTooltip::IsaTooltip(QWidget* parent)
-    : QWidget(parent)
+IsaTooltip::IsaTooltip(QWidget* parent, QWidget* container_widget)
+    : TooltipWidget(parent, false, container_widget)
     , instruction_(nullptr)
     , description_label_(nullptr)
     , description_(nullptr)
     , encodings_(nullptr)
-    , background_widget_(nullptr)
     , layout_(nullptr)
 {
-    // Tell the tooltip to paint the background for widgets contained inside it. The tooltip is sometimes transparent otherwise.
-    setAutoFillBackground(true);
-
-    // Containerize the contents of the tooltip in a dummy widget to allow manipulating the style of the tooltip.
-    QVBoxLayout* background_layout = new QVBoxLayout;
-    background_layout->setContentsMargins(0, 0, 0, 0);
-    setLayout(background_layout);
-
-    background_widget_ = new QWidget(this);
-    background_widget_->setObjectName("background_widget_");
-    background_widget_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-    background_layout->addWidget(background_widget_);
-
     layout_ = new QGridLayout;
-    layout_->setContentsMargins(kTooltipMargin, kTooltipMargin, kTooltipMargin, kTooltipMargin);
+    layout_->setContentsMargins(TooltipWidget::kTooltipMargin, TooltipWidget::kTooltipMargin, TooltipWidget::kTooltipMargin, TooltipWidget::kTooltipMargin);
     background_widget_->setLayout(layout_);
 
     QLabel* instruction_label = new QLabel("Instruction:", background_widget_);
@@ -91,69 +64,10 @@ IsaTooltip::IsaTooltip(QWidget* parent)
     encodings_ = new QLabel(background_widget_);
     encodings_->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
     layout_->addWidget(encodings_, 2, 1, Qt::AlignmentFlag::AlignLeft | Qt::AlignmentFlag::AlignTop);
-
-    // This widget's size should not change.
-    setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Fixed);
-
-    // Only show this widget when mouse is over an op code.
-    hide();
-
-    // This widget should not get focus.
-    setFocusPolicy(Qt::NoFocus);
-
-    // This widget should behave like a tooltip.
-    setWindowFlag(Qt::ToolTip, true);
-
-    // This widget should never be the active window; the main window should remain the active window.
-    setAttribute(Qt::WA_ShowWithoutActivating);
-
-    connect(&QtCommon::QtUtils::ColorTheme::Get(), &QtCommon::QtUtils::ColorTheme::ColorThemeUpdated, this, [this]() { setStyleSheet(kTooltipStylesheet); });
-
-    setStyleSheet(kTooltipStylesheet);
 }
 
 IsaTooltip::~IsaTooltip()
 {
-}
-
-void IsaTooltip::UpdatePosition(QPoint new_global_position)
-{
-    // Check if we need to modify the position so this widget stays visible.
-    bool           clipped          = false;
-    const auto     tooltip_geometry = frameGeometry();
-    const auto     tooltip_end_x    = new_global_position.x() + tooltip_geometry.width();
-    const auto     tooltip_end_y    = new_global_position.y() + tooltip_geometry.height();
-    const QScreen* current_screen   = QGuiApplication::screenAt(new_global_position);
-
-    if (current_screen != nullptr)
-    {
-        const QRect screen_geometry = current_screen->availableGeometry();
-
-        const auto screen_end_x = screen_geometry.x() + screen_geometry.width();
-        const auto screen_end_y = screen_geometry.y() + screen_geometry.height();
-
-        if (tooltip_end_x > screen_end_x)
-        {
-            // Cursor too close to right edge; prevent this widget from being clipped.
-            const auto adjusted_x = new_global_position.x() - tooltip_geometry.width();
-            new_global_position.setX(adjusted_x);
-            clipped = true;
-        }
-
-        if (tooltip_end_y > screen_end_y)
-        {
-            // Cursor too close to bottom edge; prevent this widget from being clipped.
-            const auto adjusted_y = new_global_position.y() - tooltip_geometry.height();
-            new_global_position.setY(adjusted_y);
-        }
-    }
-
-    const auto local_position  = this->mapFromGlobal(new_global_position);
-    auto       parent_position = this->mapToParent(local_position);
-
-    parent_position.setX(clipped ? (parent_position.x() - kMousePositionBuffer) : (parent_position.x() + kMousePositionBuffer));
-
-    move(parent_position);
 }
 
 void IsaTooltip::UpdateText(const amdisa::InstructionInfo& decoded_info)
@@ -179,7 +93,7 @@ void IsaTooltip::UpdateText(const amdisa::InstructionInfo& decoded_info)
 
     // Get the width of the description label and spacing.
     int description_label_width = description_label_->fontMetrics().horizontalAdvance(description_label_->text());
-    description_label_width += layout_->horizontalSpacing() + (kTooltipBorderWidth * 2) + (kTooltipMargin * 2);
+    description_label_width += layout_->horizontalSpacing() + (TooltipWidget::kTooltipBorder * 2) + (kTooltipMargin * 2);
 
     const bool word_wrap        = largest_width > kMaxTooltipWidth;
     const int  fixed_width      = word_wrap ? kMaxTooltipWidth : QWIDGETSIZE_MAX;
@@ -199,22 +113,4 @@ void IsaTooltip::UpdateText(const amdisa::InstructionInfo& decoded_info)
 
     background_widget_->adjustSize();
     adjustSize();
-}
-
-void IsaTooltip::leaveEvent(QEvent* event)
-{
-    QWidget::leaveEvent(event);
-
-    IsaTreeView* tree = qobject_cast<IsaTreeView*>(parent());  // Rely on tree being parent.
-
-    if (tree != nullptr)
-    {
-        const auto tree_local_position = tree->mapFromGlobal(QCursor::pos());
-        const auto tree_geometry       = tree->viewport()->geometry();
-
-        if (!tree_geometry.contains(tree_local_position))
-        {
-            hide();
-        }
-    }
 }

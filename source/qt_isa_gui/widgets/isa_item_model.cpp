@@ -10,6 +10,8 @@
 #include <cctype>
 #include <filesystem>
 #include <sstream>
+#include <string>
+#include <unordered_map>
 
 #include <QColor>
 #include <QFile>
@@ -45,6 +47,19 @@ namespace
     // The manager of all the architectures.
     amdisa::DecodeManager decode_manager;
 
+    // Isa decoder initialization status.
+    bool is_decoder_initialized = false;
+
+    // The individual isa spec names.
+    const std::unordered_map<amdisa::GpuArchitecture, std::string> kIsaSpecNameMap = {{amdisa::GpuArchitecture::kRdna1, "amdgpu_isa_rdna1.xml"},
+                                                                                      {amdisa::GpuArchitecture::kRdna2, "amdgpu_isa_rdna2.xml"},
+                                                                                      {amdisa::GpuArchitecture::kRdna3, "amdgpu_isa_rdna3.xml"},
+                                                                                      {amdisa::GpuArchitecture::kRdna3_5, "amdgpu_isa_rdna3_5.xml"},
+                                                                                      {amdisa::GpuArchitecture::kRdna4, "amdgpu_isa_rdna4.xml"},
+                                                                                      {amdisa::GpuArchitecture::kCdna1, "amdgpu_isa_mi100.xml"},
+                                                                                      {amdisa::GpuArchitecture::kCdna2, "amdgpu_isa_mi200.xml"},
+                                                                                      {amdisa::GpuArchitecture::kCdna3, "amdgpu_isa_mi300.xml"}};
+
     // Avoid repetitive string conversions.
     const std::string kOperandTokenSpaceStdString = IsaItemModel::kOperandTokenSpace.toStdString();
     const std::string kOperandDelimiterStdString  = IsaItemModel::kOperandDelimiter.toStdString();
@@ -79,42 +94,12 @@ namespace
 
 }  // namespace
 
-IsaItemModel::IsaItemModel(QObject* parent)
+IsaItemModel::IsaItemModel(QObject* parent, amdisa::DecodeManager* decode_manager_ptr)
     : QAbstractItemModel(parent)
     , fixed_font_character_width_(0)
     , line_numbers_visible_(true)
-    , is_decoder_initialized_(false)
+    , decode_manager_((decode_manager_ptr != nullptr) ? decode_manager_ptr : &decode_manager)
 {
-    const std::string application_dir = qApp->applicationDirPath().toStdString();
-
-    std::filesystem::path xml_file_spec_path(application_dir);
-    xml_file_spec_path /= "utils";
-    xml_file_spec_path /= "isa_spec";
-    xml_file_spec_path.make_preferred();
-
-    std::string              initialize_error_message;
-    std::vector<std::string> xml_file_paths;
-
-    if (std::filesystem::exists(xml_file_spec_path) && std::filesystem::is_directory(xml_file_spec_path))
-    {
-        for (const auto& entry : std::filesystem::directory_iterator(xml_file_spec_path))
-        {
-            if (entry.is_regular_file() && entry.path().extension() == ".xml")
-            {
-                xml_file_paths.push_back(entry.path().string());
-            }
-        }
-    }
-
-    if (!xml_file_paths.empty())
-    {
-        is_decoder_initialized_ = decode_manager.Initialize(xml_file_paths, initialize_error_message);
-    }
-
-    if (!is_decoder_initialized_)
-    {
-        qDebug() << initialize_error_message.c_str();
-    }
 }
 
 IsaItemModel::~IsaItemModel()
@@ -611,8 +596,6 @@ QVariant IsaItemModel::data(const QModelIndex& index, int role) const
 
         if (!instruction_decoded)
         {
-            qDebug() << decode_error_message;
-
             return data;
         }
         else if (!instruction_info_bundle.bundle.empty())
@@ -752,14 +735,24 @@ void IsaItemModel::SetFixedFont(const QFont& fixed_font, IsaTreeView* tree)
     fixed_font_character_width  = fixed_font_character_width_;
 }
 
-void IsaItemModel::SetArchitecture(amdisa::GpuArchitecture architecture)
+void IsaItemModel::SetArchitecture(amdisa::GpuArchitecture architecture, bool load_isa_spec)
 {
-    if (!is_decoder_initialized_)
+    if (load_isa_spec)
+    {
+        LoadIsaSpec(architecture);
+
+        if (!is_decoder_initialized)
+        {
+            return;
+        }
+    }
+
+    if (decode_manager_ == nullptr)
     {
         return;
     }
 
-    isa_decoder = decode_manager.GetDecoder(architecture);
+    isa_decoder = decode_manager_->GetDecoder(architecture);
 
     emit ArchitectureChanged(isa_decoder != nullptr);
 }
@@ -1184,4 +1177,35 @@ IsaItemModel::InstructionBlock::InstructionBlock(int block_position, uint32_t sh
 
 IsaItemModel::InstructionBlock::~InstructionBlock()
 {
+}
+
+void IsaItemModel::LoadIsaSpec(amdisa::GpuArchitecture architecture)
+{
+    const std::string application_dir = qApp->applicationDirPath().toStdString();
+
+    std::filesystem::path isa_spec_dir_path(application_dir);
+    isa_spec_dir_path /= "utils";
+    isa_spec_dir_path /= "isa_spec";
+    isa_spec_dir_path.make_preferred();
+
+    if (std::filesystem::exists(isa_spec_dir_path) && std::filesystem::is_directory(isa_spec_dir_path))
+    {
+        std::string              initialize_error_message;
+        std::vector<std::string> xml_file_paths;
+
+        if (kIsaSpecNameMap.find(architecture) != kIsaSpecNameMap.end())
+        {
+            const auto isa_spec_name = kIsaSpecNameMap.at(architecture);
+
+            std::filesystem::path isa_spec_path(isa_spec_dir_path);
+
+            isa_spec_path /= isa_spec_name;
+
+            isa_spec_path.make_preferred();
+
+            xml_file_paths.emplace_back(isa_spec_path.string());
+        }
+
+        is_decoder_initialized = decode_manager.Initialize(xml_file_paths, initialize_error_message);
+    }
 }

@@ -4,7 +4,7 @@ project(QtIsaGui)
 
 # Define version information
 set(QTISAGUI_MAJOR_VERSION 1)
-set(QTISAGUI_MINOR_VERSION 0)
+set(QTISAGUI_MINOR_VERSION 1)
 
 if (NOT QTISAGUI_PATCH_NUMBER)
     set(QTISAGUI_PATCH_NUMBER 0)
@@ -52,19 +52,19 @@ set(CPACK_ARCHIVE_COMPONENT_INSTALL ON)
 set(CPACK_COMPONENTS_GROUPING IGNORE)
 
 if (${CMAKE_BUILD_TYPE} MATCHES "Debug")
-    set(CPACK_ARCHIVE_ISAGUI_EXAMPLE_FILE_NAME "QtIsaGui_Example_Debug-${QTISAGUI_MAJOR_VERSION}.${QTISAGUI_MINOR_VERSION}.${QTISAGUI_PATCH_NUMBER}.${QTISAGUI_BUILD_NUMBER}")
+    set(CPACK_ARCHIVE_GUITEST_FILE_NAME "QtIsaGui_Test_App_Debug-${QTISAGUI_MAJOR_VERSION}.${QTISAGUI_MINOR_VERSION}.${QTISAGUI_PATCH_NUMBER}.${QTISAGUI_BUILD_NUMBER}")
 else ()
-    set(CPACK_ARCHIVE_ISAGUI_EXAMPLE_FILE_NAME "QtIsaGui_Example_${QTISAGUI_MAJOR_VERSION}.${QTISAGUI_MINOR_VERSION}.${QTISAGUI_PATCH_NUMBER}.${QTISAGUI_BUILD_NUMBER}")
+    set(CPACK_ARCHIVE_GUITEST_FILE_NAME "QtIsaGui_Test_App_${QTISAGUI_MAJOR_VERSION}.${QTISAGUI_MINOR_VERSION}.${QTISAGUI_PATCH_NUMBER}.${QTISAGUI_BUILD_NUMBER}")
 endif ()
 
 include(CPack)
 
-cpack_add_component(Example
-        DISPLAY_NAME "IsaGui Example"
-        DESCRIPTION "QtIsaGui Example Application")
+cpack_add_component(GuiTest
+        DISPLAY_NAME "IsaGui Test"
+        DESCRIPTION "QtIsaGui Test Application")
 
 IF(WIN32)
-    set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT Example)
+    set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT qt_isa_test_app)
 ENDIF(WIN32)
 
 # Copy the isa spec files for the example application.
@@ -72,20 +72,20 @@ if (PROJECT_IS_TOP_LEVEL)
 
     # Determine where the build process will be placing the binary files
     # This is evaluated at project build time - not at CMake generation time
-    set(BUILD_ROOT $<$<CONFIG:Debug>:${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}>$<$<CONFIG:Release>:${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}>)
+    set(BUILD_ROOT $<TARGET_FILE_DIR:qt_isa_test_app>)
     
     set(ISA_SPEC_OUTPUT_DIR ${BUILD_ROOT})
     
     add_custom_target(ISA_SPEC ALL)
     
     # Copy the isa xml files into a common location.
-    file(GLOB ISA_SPEC_FILES ${CMAKE_SOURCE_DIR}/external/isa_spec_manager_xml/amdgpu_isa_*.xml)
+    file(GLOB ISA_SPEC_FILES ${CMAKE_SOURCE_DIR}/external/isa_spec_xml/amdgpu_isa_*.xml)
 
     add_custom_command(TARGET ISA_SPEC POST_BUILD
     
         COMMAND ${CMAKE_COMMAND} -E make_directory ${ISA_SPEC_OUTPUT_DIR}/utils/isa_spec
     
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ISA_SPEC_FILES} ${ISA_SPEC_OUTPUT_DIR}/utils/isa_spec/.       
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different ${ISA_SPEC_FILES} ${ISA_SPEC_OUTPUT_DIR}/utils/isa_spec/.
     )
 
 endif ()

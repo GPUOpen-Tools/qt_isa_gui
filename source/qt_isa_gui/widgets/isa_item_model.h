@@ -116,8 +116,11 @@ public:
 
     /// @brief Constructor.
     ///
-    /// @param [in] parent The parent object.
-    IsaItemModel(QObject* parent = nullptr);
+    /// Allow clients to provide a pre-initialized pointer to the decode manager. If none is provided, this constructor will initialize one for the clients of this class.
+    ///
+    /// @param [in] parent         The parent object.
+    /// @param [in] decode_manager The optional handle to manager of all the architectures.
+    IsaItemModel(QObject* parent = nullptr, amdisa::DecodeManager* decode_manager = nullptr);
 
     /// @brief Destructor.
     ~IsaItemModel();
@@ -209,8 +212,9 @@ public:
 
     /// @brief Specify an architecture to be used by the decoder; used to provide op code tooltip.
     ///
-    /// @param [in] architecture The architecture version.
-    void SetArchitecture(amdisa::GpuArchitecture architecture);
+    /// @param [in] architecture  The architecture version.
+    /// @param [in] load_isa_spec true to load the isa spec in the decoder.
+    void SetArchitecture(amdisa::GpuArchitecture architecture, bool load_isa_spec = true);
 
     /// @brief Get the source model index that corresponds to the provided line number.
     ///
@@ -433,12 +437,17 @@ protected:
     bool  line_numbers_visible_;        ///< Whether the line numbers are to be shown.
 
 private:
+    /// @brief Load isa spec file for a given architecture.
+    ///
+    /// @param [in] architecture The architecture enum for which the individual isa spec is to be loaded.
+    void LoadIsaSpec(amdisa::GpuArchitecture architecture = amdisa::GpuArchitecture::kUnknown);
+
     std::array<uint32_t, kColumnCount> column_widths_ = {0, 0, 0, 0, 0};  ///< Cached column widths.
 
     std::vector<std::pair<uint32_t, uint32_t>>
         line_number_corresponding_indices_;  ///< Map line numbers to their corresponding source model indices; Line number to <parent row, child row>.
 
-    bool is_decoder_initialized_;  ///< Isa decoder initialization status.
+    amdisa::DecodeManager* decode_manager_;  ///< The handle to manager of all the architectures.
 };
 
 Q_DECLARE_METATYPE(IsaItemModel::RowType);

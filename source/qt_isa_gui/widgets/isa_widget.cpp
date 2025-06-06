@@ -35,7 +35,7 @@ static bool CompareModelIndices(const QModelIndex& lhs, const QModelIndex& rhs)
 
 IsaWidget::IsaWidget(QWidget* parent)
     : QWidget(parent)
-    , ui_(new Ui::IsaWidget)
+    , ui_(std::make_unique<Ui::IsaWidget>())
     , proxy_model_(nullptr)
     , go_to_line_validator_(nullptr)
     , viewing_options_visible_(false)
@@ -56,8 +56,8 @@ IsaWidget::IsaWidget(QWidget* parent)
 
     connect(ui_->viewing_options_combo_, &QPushButton::pressed, this, &IsaWidget::ToggleViewingOptions);
 
-    go_to_line_validator_ = new LineValidator(ui_->go_to_line_);
-    ui_->go_to_line_->setValidator(go_to_line_validator_);
+    go_to_line_validator_ = std::make_unique<LineValidator>(ui_->go_to_line_);
+    ui_->go_to_line_->setValidator(go_to_line_validator_.get());
 
     // Make the 'go to line' line edit's style sheet match the 'search' line edit's style sheet.
     ui_->go_to_line_->setStyleSheet("QLineEdit {border: 1px solid gray;}");
@@ -86,7 +86,6 @@ IsaWidget::IsaWidget(QWidget* parent)
 
 IsaWidget::~IsaWidget()
 {
-    delete go_to_line_validator_;
 }
 
 void IsaWidget::SetModelAndView(QWidget* navigation_widget_parent, IsaItemModel* isa_item_model, IsaTreeView* isa_view, IsaProxyModel* proxy_model)
@@ -120,23 +119,18 @@ void IsaWidget::SetModelAndView(QWidget* navigation_widget_parent, IsaItemModel*
         }
     }
 
-    if (ui_->isa_tree_view_ != nullptr)
-    {
-        ui_->isa_tree_view_->RegisterIsaWidget(this);
-    }
-
     // Attach a client's proxy or make the default one instead.
     if (proxy_model != nullptr)
     {
-        proxy_model_ = proxy_model;
+        proxy_model_.reset(proxy_model);
     }
     else
     {
-        proxy_model_ = new IsaProxyModel;
+        proxy_model_.reset(new IsaProxyModel);
     }
 
     proxy_model_->setSourceModel(isa_item_model);
-    ui_->isa_tree_view_->setModel(proxy_model_);
+    ui_->isa_tree_view_->setModel(proxy_model_.get());
 
     for (uint32_t column = IsaItemModel::kPcAddress; column < proxy_model_->GetNumberOfViewingOptions(); column++)
     {
@@ -166,8 +160,23 @@ void IsaWidget::SetModelAndView(QWidget* navigation_widget_parent, IsaItemModel*
     connect(ui_->branch_label_navigation_, &IsaBranchLabelNavigationWidget::Navigate, ui_->isa_tree_view_, &IsaTreeView::ReplayBranchOrLabelSelection);
 
     // Listen to isa tree expand/collapse of code block indicies to update the search match indices.
-    connect(ui_->isa_tree_view_, &QTreeView::collapsed, this, &IsaWidget::RefreshSearchMatchLineNumbers);
-    connect(ui_->isa_tree_view_, &QTreeView::expanded, this, &IsaWidget::RefreshSearchMatchLineNumbers);
+    connect(ui_->isa_tree_view_, &QTreeView::collapsed, this, [this](const QModelIndex& index) {
+        ui_->isa_tree_view_->HideTooltip();
+        RefreshSearchMatchLineNumbers(index);
+    });
+
+    connect(ui_->isa_tree_view_, &QTreeView::expanded, this, [this](const QModelIndex& index) {
+        ui_->isa_tree_view_->HideTooltip();
+        RefreshSearchMatchLineNumbers(index);
+    });
+}
+
+void IsaWidget::RegisterScrollAreas(std::vector<QScrollArea*> container_scroll_areas)
+{
+    if (ui_->isa_tree_view_ != nullptr)
+    {
+        ui_->isa_tree_view_->RegisterScrollAreas(container_scroll_areas);
+    }
 }
 
 void IsaWidget::ExpandCollapseAll(bool expand, bool resize_contents, std::deque<bool>* collapsed_blocks)
@@ -175,6 +184,8 @@ void IsaWidget::ExpandCollapseAll(bool expand, bool resize_contents, std::deque<
     // Disconnect to prevent duplicate updates.
     disconnect(ui_->isa_tree_view_, &QTreeView::collapsed, this, &IsaWidget::RefreshSearchMatchLineNumbers);
     disconnect(ui_->isa_tree_view_, &QTreeView::expanded, this, &IsaWidget::RefreshSearchMatchLineNumbers);
+
+    ui_->isa_tree_view_->HideTooltip();
 
     if (expand)
     {
@@ -339,11 +350,15 @@ void IsaWidget::ClearHistory()
 
 void IsaWidget::SetFocusOnGoToLineWidget()
 {
+    ui_->isa_tree_view_->HideTooltip();
+
     ui_->go_to_line_->setFocus();
 }
 
 void IsaWidget::SetFocusOnSearchWidget()
 {
+    ui_->isa_tree_view_->HideTooltip();
+
     ui_->search_->setFocus();
 }
 
@@ -415,7 +430,11 @@ void IsaWidget::Search()
                     delegate->SetSearchIndex(source_index);
                 }
 
-                ui_->isa_tree_view_->ScrollToIndex(source_index, false, false);
+                const QObject* sender = this->sender();
+
+                bool notify_listener = qobject_cast<const QTimer*>(sender) != nullptr;
+
+                ui_->isa_tree_view_->ScrollToIndex(source_index, false, false, notify_listener);
 
                 emit SearchMatchLineChanged(source_index);
             }
@@ -443,6 +462,8 @@ void IsaWidget::keyPressEvent(QKeyEvent* event)
 
     if (event->key() == Qt::Key_F && (event->modifiers() & Qt::ControlModifier))
     {
+        ui_->isa_tree_view_->HideTooltip();
+
         ui_->search_->setFocus();
 
         event->accept();
@@ -450,6 +471,8 @@ void IsaWidget::keyPressEvent(QKeyEvent* event)
     }
     else if (event->key() == Qt::Key_G && (event->modifiers() & Qt::ControlModifier))
     {
+        ui_->isa_tree_view_->HideTooltip();
+
         ui_->go_to_line_->setFocus();
 
         event->accept();
@@ -508,32 +531,34 @@ void IsaWidget::ShowHideColumnClicked(bool checked)
         return;
     }
 
-    const QObject* sender = this->sender();
+    const auto* sender = this->sender();
+    auto*       header = ui_->isa_tree_view_->header();
 
-    QHeaderView* header = ui_->isa_tree_view_->header();
-
-    uint32_t source_column_index = proxy_model_->GetSourceColumnIndex(static_cast<const QCheckBox*>(sender));
-
-    if (source_column_index != proxy_model_->GetNumberOfViewingOptions())
+    if ((sender != nullptr) && (header != nullptr))
     {
-        int proxy_index  = proxy_model_->mapFromSource(proxy_model_->sourceModel()->index(0, source_column_index)).column();
-        int visual_index = header->visualIndex(proxy_index);
+        uint32_t source_column_index = proxy_model_->GetSourceColumnIndex(static_cast<const QCheckBox*>(sender));
 
-        proxy_model_->SetColumnVisibility(source_column_index, checked, header);
+        if (source_column_index != proxy_model_->GetNumberOfViewingOptions())
+        {
+            int proxy_index  = proxy_model_->mapFromSource(proxy_model_->sourceModel()->index(0, source_column_index)).column();
+            int visual_index = header->visualIndex(proxy_index);
 
-        if (checked)
-        {
-            ui_->isa_tree_view_->resizeColumnToContents(proxy_model_->mapFromSource(proxy_model_->sourceModel()->index(0, source_column_index)).column());
-        }
-        else
-        {
-            // If the last column was just removed, resize the column with the next logical index to prevent a bug where it gets too large.
-            if (visual_index == proxy_model_->columnCount())
+            proxy_model_->SetColumnVisibility(source_column_index, checked, header);
+
+            if (checked)
             {
-                // Check if there was a next logical index.
-                if (header->visualIndex(proxy_index) != -1)
+                ui_->isa_tree_view_->resizeColumnToContents(proxy_model_->mapFromSource(proxy_model_->sourceModel()->index(0, source_column_index)).column());
+            }
+            else
+            {
+                // If the last column was just removed, resize the column with the next logical index to prevent a bug where it gets too large.
+                if (visual_index == proxy_model_->columnCount())
                 {
-                    ui_->isa_tree_view_->resizeColumnToContents(proxy_index);
+                    // Check if there was a next logical index.
+                    if (header->visualIndex(proxy_index) != -1)
+                    {
+                        ui_->isa_tree_view_->resizeColumnToContents(proxy_index);
+                    }
                 }
             }
         }
@@ -605,7 +630,11 @@ void IsaWidget::SearchEntered()
             delegate->SetSearchIndex(source_index);
         }
 
-        ui_->isa_tree_view_->ScrollToIndex(source_index, false, false);
+        const QObject* sender = this->sender();
+
+        bool notify_listener = qobject_cast<const QLineEdit*>(sender) != nullptr;
+
+        ui_->isa_tree_view_->ScrollToIndex(source_index, false, false, notify_listener);
 
         emit SearchMatchLineChanged(source_index);
 
@@ -632,7 +661,11 @@ void IsaWidget::GoToLineEntered()
 
     const QModelIndex source_go_to_index = source_model->GetLineNumberModelIndex(go_to_line_number);
 
-    ui_->isa_tree_view_->ScrollToIndex(source_go_to_index, false, true);
+    const QObject* sender = this->sender();
+
+    bool notify_listener = qobject_cast<const QLineEdit*>(sender) != nullptr;
+
+    ui_->isa_tree_view_->ScrollToIndex(source_go_to_index, false, true, notify_listener);
 }
 
 void IsaWidget::ToggleViewingOptions()

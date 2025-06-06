@@ -73,8 +73,8 @@ static bool CompareModelIndices(const CompareIndexInfo& lhs, const CompareIndexI
 
 IsaTreeView::IsaTreeView(QWidget* parent)
     : QTreeView(parent)
-    , isa_widget_(nullptr)
     , isa_scroll_bar_(nullptr)
+    , isa_item_delegate_(nullptr)
     , copy_line_numbers_(true)
     , last_pinned_row_(std::pair<int, int>(-1, -1))
     , paint_column_separators_(true)
@@ -120,8 +120,8 @@ IsaTreeView::IsaTreeView(QWidget* parent)
     header_font.setBold(true);
     header()->setFont(header_font);
 
-    IsaItemDelegate* isa_item_delegate = new IsaItemDelegate(this);
-    setItemDelegate(isa_item_delegate);
+    isa_item_delegate_ = std::make_unique<IsaItemDelegate>(this);
+    setItemDelegate(isa_item_delegate_.get());
 
     // Allow contiguous selection per rows.
     setSelectionMode(QAbstractItemView::SelectionMode::ContiguousSelection);
@@ -133,7 +133,9 @@ IsaTreeView::IsaTreeView(QWidget* parent)
 
     // Scroll bar to show hot spots and text search matches.
     isa_scroll_bar_ = new IsaVerticalScrollBar(this);
+
     setVerticalScrollBar(isa_scroll_bar_);
+
     connect(isa_scroll_bar_, &QScrollBar::valueChanged, this, &IsaTreeView::ScrollBarScrolled);
 
     connect(this, &QTreeView::expanded, this, &IsaTreeView::IndexExpandedOrCollapsed);
@@ -142,6 +144,23 @@ IsaTreeView::IsaTreeView(QWidget* parent)
 
 IsaTreeView::~IsaTreeView()
 {
+}
+
+void IsaTreeView::ReplaceDelegate(IsaItemDelegate* delegate)
+{
+    setItemDelegate(delegate);
+
+    isa_item_delegate_.reset(delegate);
+}
+
+void IsaTreeView::RegisterScrollAreas(std::vector<QScrollArea*> container_scroll_areas)
+{
+    IsaItemDelegate* isa_item_delegate = qobject_cast<IsaItemDelegate*>(itemDelegate());
+
+    if (isa_item_delegate != nullptr)
+    {
+        isa_item_delegate->RegisterScrollAreas(container_scroll_areas);
+    }
 }
 
 void IsaTreeView::SetHotSpotLineNumbers(const std::set<QModelIndex>& source_indices)
@@ -292,13 +311,13 @@ void IsaTreeView::ShowBranchInstructionsMenu(QVector<QModelIndex> source_indices
     {
         const QModelIndex& source_index = action_to_index_map.value(result_action->text());
 
-        ScrollToIndex(source_index, true, true);
+        ScrollToIndex(source_index, true, true, true);
     }
 
     setCursor(Qt::ArrowCursor);
 }
 
-void IsaTreeView::ScrollToIndex(const QModelIndex source_index, bool record, bool select_row)
+void IsaTreeView::ScrollToIndex(const QModelIndex source_index, bool record, bool select_row, bool notify_listener)
 {
     const QSortFilterProxyModel* isa_tree_proxy_model = qobject_cast<const QSortFilterProxyModel*>(this->model());
 
@@ -325,11 +344,26 @@ void IsaTreeView::ScrollToIndex(const QModelIndex source_index, bool record, boo
     {
         emit ScrolledToBranchOrLabel(source_index);
     }
+
+    if (notify_listener)
+    {
+        emit ScrolledToIndex(source_index);
+    }
+}
+
+void IsaTreeView::HideTooltip() const
+{
+    const IsaItemDelegate* isa_delegate = qobject_cast<IsaItemDelegate*>(itemDelegate());
+
+    if (isa_delegate != nullptr)
+    {
+        isa_delegate->HideTooltip();
+    }
 }
 
 void IsaTreeView::ReplayBranchOrLabelSelection(QModelIndex branch_label_source_index)
 {
-    ScrollToIndex(branch_label_source_index, false, true);
+    ScrollToIndex(branch_label_source_index, false, true, true);
 }
 
 void IsaTreeView::drawRow(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const
@@ -424,28 +458,9 @@ void IsaTreeView::keyPressEvent(QKeyEvent* event)
     }
 }
 
-void IsaTreeView::leaveEvent(QEvent* event)
-{
-    QTreeView::leaveEvent(event);
-
-    const IsaItemDelegate* isa_delegate   = qobject_cast<IsaItemDelegate*>(itemDelegate());
-    const auto             local_position = mapFromGlobal(QCursor::pos());
-    const auto             geometry       = viewport()->geometry();
-
-    if (isa_delegate != nullptr && !geometry.contains(local_position))
-    {
-        isa_delegate->HideTooltip();
-    }
-}
-
 void IsaTreeView::ToggleCopyLineNumbers()
 {
     copy_line_numbers_ = !copy_line_numbers_;
-}
-
-void IsaTreeView::RegisterIsaWidget(IsaWidget* widget)
-{
-    isa_widget_ = widget;
 }
 
 void IsaTreeView::CopyRowsToClipboard()
@@ -599,12 +614,4 @@ void IsaTreeView::ScrollBarScrolled(int value)
 
     // Notify the viewport to refresh.
     viewport()->update();
-
-    // Force hide the tooltip if the tree view is scrolled.
-    const IsaItemDelegate* isa_delegate = qobject_cast<IsaItemDelegate*>(itemDelegate());
-
-    if (isa_delegate != nullptr)
-    {
-        isa_delegate->HideTooltip();
-    }
 }

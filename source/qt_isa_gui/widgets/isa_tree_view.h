@@ -8,7 +8,10 @@
 #ifndef QTISAGUI_ISA_TREE_VIEW_H_
 #define QTISAGUI_ISA_TREE_VIEW_H_
 
+#include <memory>
+
 #include <QKeyEvent>
+#include <QScrollArea>
 #include <QTreeView>
 #include <QWheelEvent>
 
@@ -17,6 +20,7 @@
 
 // Forward declaration to prevent a circular dependency.
 class IsaWidget;
+class IsaItemDelegate;
 
 /// @brief IsaTreeView is a tree view intended to be attached to a IsaItemModel
 ///        to display isa in a tree structure. It instantiates and uses an IsaItemDelegate
@@ -33,6 +37,18 @@ public:
 
     /// @brief Destructor.
     virtual ~IsaTreeView();
+
+    /// @brief Set a new delegate on to this tree and manage it.
+    ///
+    /// @param [in] delegate The new delegate to use.
+    void ReplaceDelegate(IsaItemDelegate* delegate);
+
+    /// @brief Remember any scroll areas that should affect the isa tooltip's visibility.
+    ///
+    /// If the tooltip leaves the geometry of a given scroll area the tooltip should be hidden.
+    ///
+    /// @param [in] container_scroll_areas The scroll areas to remember.
+    void RegisterScrollAreas(std::vector<QScrollArea*> container_scroll_areas);
 
     /// @brief Set the line #(s) of hot spot(s) to paint a red rectangle in the scroll bar.
     ///        Use an instruction's source index to get its relative line number.
@@ -55,20 +71,19 @@ public:
 
     /// @brief Respond to a request and scroll this tree to the given source model index.
     ///
-    /// @param [in] source_index The source model index to scroll to.
-    /// @param [in] record       true to record the scroll into navigation history, false to skip recording.
-    /// @param [in] select_row   true to select the row of the index, false to not select it.
-    virtual void ScrollToIndex(const QModelIndex source_index, bool record, bool select_row);
+    /// @param [in] source_index    The source model index to scroll to.
+    /// @param [in] record          true to record the scroll into navigation history, false to skip recording.
+    /// @param [in] select_row      true to select the row of the index, false to not select it.
+    /// @param [in] notify_listener true to send a signal notifying the app a scroll occured, false to not send the signal.
+    virtual void ScrollToIndex(const QModelIndex source_index, bool record, bool select_row, bool notify_listener);
+
+    /// @brief Force hide the tooltip.
+    virtual void HideTooltip() const;
 
     /// @brief Toggles the copy_line_numbers_ variable true and false. Used to know if line number text should be included when copying isa text.
     void ToggleCopyLineNumbers();
 
-    /// @brief Saves a link (pointer) to the ISA widget for use later.
-    ///
-    /// @param [in] widget The pointer to the IsaWidget.
-    void RegisterIsaWidget(IsaWidget* widget);
-
-    /// @breif Invalidates the index that keeps track of the last row to have a code block pinned to it when switching events, shader stages, or profiles.
+    /// @brief Invalidates the index that keeps track of the last row to have a code block pinned to it when switching events, shader stages, or profiles.
     void ClearLastPinnedndex()
     {
         last_pinned_row_ = std::pair<int, int>(-1, -1);
@@ -95,6 +110,9 @@ signals:
     /// @param [in] branch_label_source_index The source model index that was scrolled to.
     void ScrolledToBranchOrLabel(QModelIndex branch_label_source_index);
 
+    /// @brief Notify the application when the tree view programmatically scrolled to a line.
+    void ScrolledToIndex(const QModelIndex source_index);
+
 protected:
     /// @brief Override drawRow to manually paint alternating background colors to assist painting labels and comments across columns.
     ///
@@ -110,11 +128,6 @@ protected:
     ///
     /// @param [in] event The key event.
     virtual void keyPressEvent(QKeyEvent* event) Q_DECL_OVERRIDE;
-
-    /// @brief Override leave to make sure the isa tooltip is not visible if the mouse leaves this tree view.
-    ///
-    /// @param [in] event The leave event.
-    virtual void leaveEvent(QEvent* event) Q_DECL_OVERRIDE;
 
     /// @brief Copy selected rows to clipboard.
     void CopyRowsToClipboard();
@@ -179,11 +192,11 @@ private:
     /// @param [in] value The new value of the scroll bar.
     void ScrollBarScrolled(int value);
 
-    IsaWidget*            isa_widget_;               ///< The Isa widget.
-    IsaVerticalScrollBar* isa_scroll_bar_;           ///< Scroll bar to paint red and purple rectangles corresponding to hot spots and text search matches.
-    bool                  copy_line_numbers_;        ///< Whether the line number text is to be included when copying isa text. True by default.
-    std::pair<int, int>   last_pinned_row_;          ///< The code block and instruction rows of the last index that was pinned.
-    bool                  paint_column_separators_;  ///< Whether or not to paint the the column separators.
+    IsaVerticalScrollBar*            isa_scroll_bar_;           ///< Scroll bar to paint red and purple rectangles for hot spots and text search matches.
+    std::unique_ptr<IsaItemDelegate> isa_item_delegate_;        ///< Delegate attached to this tree.
+    bool                             copy_line_numbers_;        ///< Whether the line number text is to be included when copying isa text. True by default.
+    std::pair<int, int>              last_pinned_row_;          ///< The code block and instruction rows of the last index that was pinned.
+    bool                             paint_column_separators_;  ///< Whether or not to paint the the column separators.
 };
 
 #endif  // QTISAGUI_ISA_TREE_VIEW_H_

@@ -11,6 +11,7 @@
 #include <QModelIndex>
 #include <QPainter>
 #include <QRectF>
+#include <QScrollArea>
 #include <QStyleOptionViewItem>
 #include <QStyledItemDelegate>
 #include <QTimer>
@@ -35,6 +36,13 @@ public:
 
     /// @brief Destructor.
     ~IsaItemDelegate();
+
+    /// @brief Remember any scroll areas that should affect the isa tooltip's visibility.
+    ///
+    /// If the tooltip leaves the geometry of a given scroll area the tooltip should be hidden.
+    ///
+    /// @param [in] container_scroll_areas The scroll areas to remember.
+    void RegisterScrollAreas(std::vector<QScrollArea*> container_scroll_areas);
 
     /// @brief Override editor event in order to track mouse moves and mouse clicks over code block labels and selectable tokens.
     ///
@@ -62,7 +70,7 @@ public:
     virtual QSize sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const Q_DECL_OVERRIDE;
 
     /// @brief Hide the tooltip managed by this delegate.
-    void HideTooltip() const;
+    virtual void HideTooltip() const;
 
     /// @brief Cache the current search text to assist highlighting search text matches.
     ///
