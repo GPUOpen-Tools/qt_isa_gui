@@ -16,22 +16,22 @@
 
 #include "isa_item_model.h"
 
-/// @brief IsaProxyModel is a filter model meant to filter default columns for an IsaItemModel.
+/// @brief IsaProxyModel is a filter model meant to filter columns for an IsaItemModel.
 ///
-/// It filters out IsaItemModel columns set to be invisible via the gui.
+/// It can filter out IsaItemModel columns set to be invisible via the gui.
 class IsaProxyModel : public QSortFilterProxyModel
 {
     Q_OBJECT
 
 public:
-    /// @brief Constructor; default all columns to visible.
+    /// @brief Constructor; set default column visibility.
     ///
-    /// @param [in] parent The parent object.
+    /// @param [in] parent            The parent object.
     /// @param [in] columns_visiblity Vector to specify column visibilty. kPcAddress and kBinaryRepresentation are hidden by default.
     explicit IsaProxyModel(QObject* parent = nullptr, std::vector<bool> columns_visiblity = {true, false, true, true, false});
 
     /// @brief Destructor.
-    virtual ~IsaProxyModel();
+    virtual ~IsaProxyModel() = default;
 
     /// @brief Change the visibility of a column and invalidate this model.
     ///

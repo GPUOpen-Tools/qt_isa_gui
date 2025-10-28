@@ -512,7 +512,7 @@ void IsaTreeView::CopyRowsToClipboard()
 
             // Indent opcodes.
             if (compare_index_info.source_index.column() == IsaItemModel::kOpCode && compare_index_info.source_index.parent().isValid() &&
-                compare_index_info.source_index.data(IsaItemModel::kRowTypeRole).value<IsaItemModel::RowType>() == IsaItemModel::RowType::kCode)
+                compare_index_info.source_index.data(IsaItemModel::kRowTypeRole).value<IsaItemModel::RowType>() == IsaItemModel::RowType::kIsa)
             {
                 text = QString("    " + text);
             }
@@ -552,7 +552,7 @@ void IsaTreeView::CopyRowsToClipboard()
 
             // Indent opcodes.
             if (compare_index_info.source_index.column() == IsaItemModel::kOpCode && compare_index_info.source_index.parent().isValid() &&
-                compare_index_info.source_index.data(IsaItemModel::kRowTypeRole).value<IsaItemModel::RowType>() == IsaItemModel::RowType::kCode)
+                compare_index_info.source_index.data(IsaItemModel::kRowTypeRole).value<IsaItemModel::RowType>() == IsaItemModel::RowType::kIsa)
             {
                 text = QString("    " + text);
             }

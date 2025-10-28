@@ -23,10 +23,6 @@ IsaProxyModel::IsaProxyModel(QObject* parent, std::vector<bool> columns_visiblit
     }
 }
 
-IsaProxyModel::~IsaProxyModel()
-{
-}
-
 void IsaProxyModel::SetColumnVisibility(uint32_t column, bool visibility, QHeaderView* header)
 {
     if (column >= visible_columns_.size())

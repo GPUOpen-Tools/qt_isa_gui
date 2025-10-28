@@ -31,6 +31,8 @@
 /// @param [in] color_coding_enabled True to apply a color coding to the token, false otherwise.
 static void PaintTokenText(const IsaItemModel::Token& token, const QRectF& token_rectangle, QPainter* painter, const bool color_coding_enabled)
 {
+    painter->save();
+
     if (color_coding_enabled)
     {
         QColor color;
@@ -61,6 +63,8 @@ static void PaintTokenText(const IsaItemModel::Token& token, const QRectF& token
     }
 
     painter->drawText(token_rectangle, Qt::TextSingleLine, token.token_text.c_str());
+
+    painter->restore();
 }
 
 /// @brief Paint a comma.
@@ -85,10 +89,6 @@ IsaItemDelegate::IsaItemDelegate(IsaTreeView* view, QObject* parent)
     // Force hide the tooltip if the tree view is scrolled.
     connect(view_->horizontalScrollBar(), &QScrollBar::valueChanged, this, [this]() { tooltip_->hide(); });
     connect(view_->verticalScrollBar(), &QScrollBar::valueChanged, this, [this]() { tooltip_->hide(); });
-}
-
-IsaItemDelegate::~IsaItemDelegate()
-{
 }
 
 void IsaItemDelegate::RegisterScrollAreas(std::vector<QScrollArea*> container_scroll_areas)
@@ -268,219 +268,89 @@ bool IsaItemDelegate::editorEvent(QEvent* event, QAbstractItemModel* model, cons
     return false;
 }
 
-void IsaItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& model_index) const
+void IsaItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& proxy_index) const
 {
-    // Bounds checking.
-    if (!model_index.isValid())
+    if (!proxy_index.isValid())
     {
         return;
     }
 
-    const IsaProxyModel* proxy_model  = qobject_cast<const IsaProxyModel*>(model_index.model());
-    const IsaItemModel*  source_model = nullptr;
-    QModelIndex          source_model_index;
+    const IsaProxyModel* proxy_model = qobject_cast<const IsaProxyModel*>(proxy_index.model());
 
-    // Get the source model and index.
     if (proxy_model == nullptr)
     {
-        source_model_index = model_index;
-        source_model       = qobject_cast<const IsaItemModel*>(model_index.model());
+        return;
     }
-    else
-    {
-        source_model_index = proxy_model->mapToSource(model_index);
-        source_model       = qobject_cast<const IsaItemModel*>(proxy_model->sourceModel());
-    }
+
+    const IsaItemModel* source_model = qobject_cast<const IsaItemModel*>(proxy_model->sourceModel());
 
     if (source_model == nullptr)
     {
         return;
     }
 
-    const auto row_type                  = qvariant_cast<IsaItemModel::RowType>(source_model_index.data(IsaItemModel::UserRoles::kRowTypeRole));
-    const bool is_comment                = row_type == IsaItemModel::RowType::kComment;
-    int        proxy_index_y_position    = -1;
-    const bool block_label_pinned_to_top = BlockLabelPinnedToTop(source_model_index, model_index, proxy_index_y_position);
+    const QModelIndex source_index              = proxy_model->mapToSource(proxy_index);
+    const bool        block_label_pinned_to_top = BlockLabelPinnedToTop(proxy_index);
 
     QStyleOptionViewItem initialized_option = option;
-    initStyleOption(&initialized_option, source_model_index);
+    initStyleOption(&initialized_option, source_index);
+    QRectF paint_rectangle = initialized_option.rect;
 
     painter->save();
     painter->setFont(initialized_option.font);
 
-    // Pin instructions' block labels to the top of the screen and paint them instead of painting an instruction.
     if (block_label_pinned_to_top)
     {
-        // This index is part of a child row and is at the top of its tree's viewport.
-        // Instead of painting the child row normally, paint its parent label, as if it is pinned to the top of the viewport.
-        // The pinned parent label should span across columns.
+        // Pin instructions' block label to the top of the viewport and paint them instead of painting the instruction.
 
-        const auto parent_op_code_source = source_model_index.parent().siblingAtColumn(IsaItemModel::kOpCode);
-        const auto parent_op_code_proxy  = (proxy_model != nullptr) ? proxy_model->mapFromSource(parent_op_code_source) : parent_op_code_source;
-        const auto x_position            = GetColumnSpanStartPosition(is_comment, parent_op_code_proxy);
-
-        PaintSpanned(painter, initialized_option, parent_op_code_source, x_position);
+        PaintPinnedBlockLabel(painter, source_index, paint_rectangle, initialized_option, proxy_model);
 
         painter->restore();
         return;
     }
 
-    // If this row is selected or moused-over, render a highlight.
-    if ((((initialized_option.state & QStyle::State_Selected) != 0) || ((initialized_option.state & QStyle::State_MouseOver) != 0)))
-    {
-        initialized_option.widget->style()->drawPrimitive(QStyle::PE_PanelItemViewItem, &initialized_option, painter, initialized_option.widget);
-    }
+    PaintRowSelection(painter, initialized_option);
 
-    // Don't try to paint any columns not defined in the isa model.
-    if (source_model_index.column() >= IsaItemModel::kColumnCount)
+    if (source_index.column() >= IsaItemModel::kColumnCount)
     {
+        // Don't try to paint any columns not defined in the isa model.
         painter->restore();
         return;
     }
 
-    QRectF paint_rectangle = initialized_option.rect;
+    const auto row_type          = source_index.data(IsaItemModel::UserRoles::kRowTypeRole).value<IsaItemModel::RowType>();
+    const auto span_columns      = view_->isFirstColumnSpanned(proxy_index.row(), proxy_index.parent());
+    const auto display_role_text = GetIndexPlainText(span_columns, source_index);
 
-    // Advance the starting position of the text by a predefined indent for child instruction op codes not pinned to the top of the view.
-    if ((source_model_index.column() == IsaItemModel::kOpCode) && (row_type != IsaItemModel::RowType::kComment) && (source_model_index.parent().isValid()) &&
-        (proxy_index_y_position != 0))
-    {
-        paint_rectangle.setX(paint_rectangle.x() + initialized_option.fontMetrics.horizontalAdvance(IsaItemModel::kOpCodeColumnIndent));
-    }
+    AdjustPaintRectangle(paint_rectangle, row_type, source_index, proxy_model, initialized_option.fontMetrics, span_columns);
 
-    // Paint a highlight rectangle for any text search matches in columns defined in the isa model, except the line number column.
-    bool    paint_highlight = false;
-    QString display_role_text_for_highlight;
-
-    if (view_->isFirstColumnSpanned(model_index.row(), model_index.parent()))
-    {
-        // Highlight comments and labels which also span columns.
-
-        paint_highlight = true;
-
-        // Comments and labels are stored in the op code column so get them from the op code column's display role.
-        const auto op_code_source_index = source_model_index.siblingAtColumn(IsaItemModel::kOpCode);
-        display_role_text_for_highlight = op_code_source_index.data(Qt::DisplayRole).toString();
-        const auto op_code_proxy_index  = (proxy_model != nullptr) ? proxy_model->mapFromSource(op_code_source_index) : op_code_source_index;
-        const auto x_position           = GetColumnSpanStartPosition(is_comment, op_code_proxy_index);
-
-        paint_rectangle.setX(x_position);
-    }
-    else if ((source_model_index.column() == IsaItemModel::kOpCode) || (source_model_index.column() == IsaItemModel::kOperands) ||
-             (source_model_index.column() == IsaItemModel::kPcAddress) || source_model_index.column() == IsaItemModel::kBinaryRepresentation)
-    {
-        // Highlighting op codes, operands, addresses and binary representation.
-
-        paint_highlight = true;
-
-        // Get their concatenated text from their own display roles.
-        display_role_text_for_highlight = source_model_index.data(Qt::DisplayRole).toString();
-    }
-
-    if (paint_highlight)
-    {
-        PaintSearchHighlight(painter, paint_rectangle, display_role_text_for_highlight, source_model->GetFixedFontCharacterWidth(), source_model_index);
-    }
+    PaintSearchHighlight(painter, paint_rectangle, display_role_text, source_model->GetFixedFontCharacterWidth(), source_index);
 
     // Get a default text color if applicable.
-    QVariant color_data = source_model_index.data(Qt::ForegroundRole);
-    if (color_data != QVariant())
+    const auto default_text_color = source_index.data(Qt::ForegroundRole).value<QColor>();
+    auto       pen                = painter->pen();
+    pen.setColor(default_text_color);
+    painter->setPen(pen);
+
+    QModelIndex source_index_to_paint = source_index;
+
+    if (source_index.column() == IsaItemModel::kLineNumber)
     {
-        auto pen = painter->pen();
-        pen.setColor(color_data.value<QColor>());
-        painter->setPen(pen);
+        if (source_model->LineNumbersVisible())
+        {
+            // Paint line #s if they aren't turned off.
+            PaintLineNumber(painter, source_index, option.rect, option);
+        }
+
+        if (span_columns)
+        {
+            // Rows that span columns get their meta-data from the op code column.
+            source_index_to_paint = source_index.siblingAtColumn(IsaItemModel::kOpCode);
+        }
     }
 
     // Custom paint all columns defined in the isa model.
-    if (source_model_index.column() == IsaItemModel::kLineNumber)
-    {
-        // Use the line number column to paint line numbers and any rows that span across columns.
-        // Comments and block labels should span across columns.
-
-        if (!block_label_pinned_to_top && source_model->LineNumbersVisible())
-        {
-            // Paint line #s if they aren't turned off and if this isn't a pinned block label.
-
-            const auto line_number_text = source_model_index.data(Qt::DisplayRole).toString() + IsaItemModel::kColumnPadding;
-            QRectF     line_number_rect = initialized_option.rect;
-
-            // Right align the line number to its column.
-            const int line_number_column_width = view_->header()->sectionSize(view_->header()->logicalIndex(0));
-            const int line_number_text_width   = initialized_option.fontMetrics.horizontalAdvance(line_number_text);
-            const int scroll_bar_position      = view_->horizontalScrollBar()->value();
-            const int line_number_x_position   = line_number_column_width - line_number_text_width - scroll_bar_position;
-
-            line_number_rect.setX(line_number_x_position);
-            line_number_rect.setWidth(initialized_option.fontMetrics.horizontalAdvance(line_number_text));
-
-            painter->drawText(line_number_rect, Qt::Alignment(Qt::AlignLeft | Qt::AlignTop), line_number_text);
-        }
-
-        const auto op_code_source_index = source_model_index.siblingAtColumn(IsaItemModel::kOpCode);
-
-        if (!source_model_index.parent().isValid())
-        {
-            // Paint all parent block labels across columns.
-
-            PaintSpanned(painter, initialized_option, op_code_source_index, paint_rectangle.x());
-        }
-        else if (row_type == IsaItemModel::RowType::kComment)
-        {
-            // Paint child comments across columns.
-
-            PaintSpanned(painter, initialized_option, op_code_source_index, paint_rectangle.x());
-        }
-    }
-    else if ((source_model_index.column() == IsaItemModel::kOpCode) && source_model_index.parent().isValid() && (proxy_index_y_position != 0) &&
-             (row_type != IsaItemModel::RowType::kComment))
-    {
-        // Child instruction in the op code column that is not at the top of its tree's viewport.
-        // Paint color coded op codes.
-
-        auto font = painter->font();
-        font.setBold(true);
-        painter->setFont(font);
-
-        const std::vector<IsaItemModel::Token> op_code_token = qvariant_cast<std::vector<IsaItemModel::Token>>(source_model_index.data(Qt::UserRole));
-
-        PaintText(painter, initialized_option, source_model_index, paint_rectangle, op_code_token, 0, false);
-    }
-    else if ((source_model_index.column() == IsaItemModel::kOperands) && source_model_index.parent().isValid() && (proxy_index_y_position != 0) &&
-             (row_type != IsaItemModel::RowType::kComment))
-    {
-        // Child instruction in the operands column that is not at the top of its tree's viewport.
-        // Paint color coded operands.
-
-        auto font = painter->font();
-        font.setBold(true);
-        painter->setFont(font);
-
-        std::vector<std::vector<IsaItemModel::Token>> tokens =
-            qvariant_cast<std::vector<std::vector<IsaItemModel::Token>>>(source_model_index.data(Qt::UserRole));
-
-        std::pair<int, QRectF> token_info = std::pair<int, QRectF>(0, paint_rectangle);
-
-        // Break the operands down into their individual tokens, and paint them token by token.
-        for (size_t i = 0; i < tokens.size(); i++)
-        {
-            const auto& operand_tokens = tokens.at(i);
-
-            token_info = PaintText(painter, initialized_option, source_model_index, token_info.second, operand_tokens, token_info.first, false);
-
-            // Add a comma if it is not the last operand.
-            if (i < tokens.size() - 1)
-            {
-                PaintCommaText(token_info.second, painter);
-
-                token_info.second.adjust(initialized_option.fontMetrics.horizontalAdvance(QString(IsaItemModel::kOperandDelimiter)), 0, 0, 0);
-            }
-        }
-    }
-    else if (source_model_index.column() == IsaItemModel::kPcAddress || source_model_index.column() == IsaItemModel::kBinaryRepresentation)
-    {
-        // Paint pc address and binary representation as plain text.
-
-        painter->drawText(paint_rectangle, initialized_option.displayAlignment, source_model_index.data(Qt::DisplayRole).toString());
-    }
+    PaintText(painter, source_index_to_paint, paint_rectangle);
 
     painter->restore();
 }
@@ -544,12 +414,12 @@ void IsaItemDelegate::HideTooltip() const
     tooltip_->hide();
 }
 
-bool IsaItemDelegate::BlockLabelPinnedToTop(const QModelIndex& source_model_index, const QModelIndex& proxy_model_index, int& proxy_index_y_position) const
+bool IsaItemDelegate::BlockLabelPinnedToTop(const QModelIndex& proxy_index) const
 {
-    const QRect proxy_index_visual_rect = view_->visualRect(proxy_model_index);
-    proxy_index_y_position              = proxy_index_visual_rect.y();
+    const auto proxy_index_visual_rect = view_->visualRect(proxy_index);
+    const auto proxy_index_y_position  = proxy_index_visual_rect.y();
 
-    if (source_model_index.parent().isValid() && proxy_index_y_position == 0)
+    if (proxy_index.parent().isValid() && proxy_index_y_position == 0)
     {
         return true;
     }
@@ -670,13 +540,13 @@ int IsaItemDelegate::GetColumnSpanStartPosition(const bool is_comment, const QMo
 
     if (is_comment || !proxy_index.isValid())
     {
-        // When paintint spanning text for a comment or for a label while the op code column is not visible,
+        // When painting spanning text for comments or isa labels while the op code column is not visible,
         // start painting right after the line # column.
         x_position = view_->header()->sectionPosition(view_->header()->logicalIndex(1));
     }
     else
     {
-        // When painting spanning text for a label while the op code column is visible,
+        // When painting spanning text for an isa label while the op code column is visible,
         // start painting at the op code column.
         x_position = view_->header()->sectionPosition(proxy_index.column());
     }
@@ -702,9 +572,8 @@ bool IsaItemDelegate::SetSelectableTokenUnderMouse(const QModelIndex&   source_i
     }
 
     // Check if the index is a block label pinned to the top of the view, because we don't show tokens if it is pinned.
-    int proxy_index_y_position = -1;
 
-    if (BlockLabelPinnedToTop(source_index, proxy_index, proxy_index_y_position))
+    if (BlockLabelPinnedToTop(proxy_index))
     {
         return false;
     }
@@ -910,102 +779,217 @@ void IsaItemDelegate::PaintTokenHighlight(const IsaItemModel::Token& token,
     }
 }
 
-void IsaItemDelegate::PaintSpanned(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& source_index, int x_position) const
+void IsaItemDelegate::PaintText(QPainter* painter, const QModelIndex& source_index, QRectF paint_rectangle) const
 {
     painter->save();
 
-    auto font = source_index.data(Qt::FontRole).value<QFont>();
-    font.setBold(true);
-    painter->setFont(font);
-
-    QVariant op_code_color_data = source_index.data(Qt::ForegroundRole);
-
-    if (op_code_color_data != QVariant())
+    if ((source_index.column() != IsaItemModel::kPcAddress && source_index.column() != IsaItemModel::kBinaryRepresentation))
     {
-        auto pen = painter->pen();
-        pen.setColor(op_code_color_data.value<QColor>());
-        painter->setPen(pen);
+        // Paint comments and isa as bold.
+        auto font = painter->font();
+        font.setBold(true);
+        painter->setFont(font);
     }
 
-    const std::vector<IsaItemModel::Token> tokens     = qvariant_cast<std::vector<IsaItemModel::Token>>(source_index.data(Qt::UserRole));
-    const auto                             row_type   = qvariant_cast<IsaItemModel::RowType>(source_index.data(IsaItemModel::UserRoles::kRowTypeRole));
-    const bool                             is_comment = row_type == IsaItemModel::RowType::kComment;
+    // Refresh the starting color for the source index provided.
+    const auto text_color = source_index.data(Qt::ForegroundRole).value<QColor>();
+    auto       pen        = painter->pen();
+    pen.setColor(text_color);
+    painter->setPen(pen);
 
-    x_position -= view_->horizontalScrollBar()->value();
+    // Refresh the style option for the source index provided.
+    QStyleOptionViewItem initialized_option;
+    initStyleOption(&initialized_option, source_index);
 
-    QRect text_rectangle = option.rect;
-    text_rectangle.setX(x_position);
-    text_rectangle.setWidth(view_->width() - text_rectangle.x());
+    const auto row_type = qvariant_cast<IsaItemModel::RowType>(source_index.data(IsaItemModel::UserRoles::kRowTypeRole));
 
-    PaintText(painter, option, source_index, text_rectangle, tokens, 0, is_comment);
+    if ((row_type == IsaItemModel::RowType::kComment) ||
+        ((row_type == IsaItemModel::RowType::kIsa) &&
+         (source_index.column() == IsaItemModel::kPcAddress || source_index.column() == IsaItemModel::kBinaryRepresentation)))
+    {
+        // Paint parent and child comments, pc address and binary representation, as a single string using a single color.
+
+        painter->drawText(paint_rectangle, initialized_option.displayAlignment, source_index.data(Qt::DisplayRole).toString());
+    }
+    else if ((row_type == IsaItemModel::RowType::kIsa))
+    {
+        if ((source_index.column() == IsaItemModel::kOpCode))
+        {
+            // Paint parent isa block label or child op code as a single color coded token.
+
+            const std::vector<IsaItemModel::Token> op_code_token        = qvariant_cast<std::vector<IsaItemModel::Token>>(source_index.data(Qt::UserRole));
+            const bool                             color_coding_enabled = source_index.data(IsaItemModel::kLineEnabledRole).toBool();
+
+            PaintTokenHighlight(op_code_token.front(),
+                                paint_rectangle,
+                                painter,
+                                initialized_option.fontMetrics,
+                                source_index.parent().row(),
+                                source_index.row(),
+                                0);  // Assume 0 index for op code.
+
+            PaintTokenText(op_code_token.front(), paint_rectangle, painter, color_coding_enabled);
+        }
+        else if ((source_index.column() == IsaItemModel::kOperands) && (source_index.parent().isValid()))
+        {
+            // Paint child isa operands as a series of color coded tokens.
+
+            PaintOperands(painter, source_index, paint_rectangle, initialized_option);
+        }
+    }
 
     painter->restore();
 }
 
-std::pair<int, QRectF> IsaItemDelegate::PaintText(QPainter*                        painter,
-                                                  const QStyleOptionViewItem&      option,
-                                                  const QModelIndex&               source_index,
-                                                  QRectF                           token_rectangle,
-                                                  std::vector<IsaItemModel::Token> tokens,
-                                                  int                              token_index,
-                                                  bool                             is_comment) const
+void IsaItemDelegate::PaintOperands(QPainter* painter, const QModelIndex& source_index, QRectF paint_rectangle, const QStyleOptionViewItem& option) const
 {
-    if (is_comment)
-    {
-        painter->drawText(token_rectangle, Qt::Alignment(Qt::AlignLeft | Qt::AlignTop), source_index.data(Qt::DisplayRole).toString());
-    }
-    else if (!source_index.parent().isValid())
-    {
-        if (!tokens.empty())
-        {
-            const bool color_coding_enabled = source_index.data(IsaItemModel::kLineEnabledRole).toBool();
-            painter->save();
-            PaintTokenText(tokens.front(), token_rectangle, painter, color_coding_enabled);
-            painter->restore();
-        }
-    }
-    else
-    {
-        for (size_t i = 0; i < tokens.size(); i++)
-        {
-            const auto token = tokens.at(i);
+    std::vector<std::vector<IsaItemModel::Token>> operand_groups_tokens =
+        qvariant_cast<std::vector<std::vector<IsaItemModel::Token>>>(source_index.data(Qt::UserRole));
 
+    int token_index = 0;  // Track token index to assist painting selection highlight.
+
+    // Iterate over operands.
+    for (size_t i = 0; i < operand_groups_tokens.size(); i++)
+    {
+        const auto& operand_tokens = operand_groups_tokens.at(i);
+
+        // Iterate over tokens within an operand.
+        for (size_t j = 0; j < operand_tokens.size(); j++)
+        {
+            const auto token = operand_tokens.at(j);
+
+            // Check if we need to paint a selection highlight.
             if (token.is_selectable)
             {
-                PaintTokenHighlight(token,
-                                    token_rectangle,
-                                    painter,
-                                    option.fontMetrics,
-                                    source_index.parent().row(),
-                                    source_index.row(),
-                                    token_index);  // Assume 0 index for op code.
+                PaintTokenHighlight(token, paint_rectangle, painter, option.fontMetrics, source_index.parent().row(), source_index.row(), token_index);
             }
 
+            // Paint a color coded operand token.
             const bool color_coding_enabled = source_index.data(IsaItemModel::kLineEnabledRole).toBool();
+            PaintTokenText(token, paint_rectangle, painter, color_coding_enabled);
 
-            painter->save();
-            PaintTokenText(token, token_rectangle, painter, color_coding_enabled);
+            // Re-use color and draw a line underneath tokens that are the target of a branch instruction.
             if (token.type == IsaItemModel::TokenType::kBranchLabelType)
             {
-                QPoint label_underline_start(token_rectangle.x() + token.x_position_start, token_rectangle.bottom());
-                QPoint label_underline_end(token_rectangle.x() + token.x_position_end, token_rectangle.bottom());
+                QPoint label_underline_start(paint_rectangle.x() + token.x_position_start, paint_rectangle.bottom());
+                QPoint label_underline_end(paint_rectangle.x() + token.x_position_end, paint_rectangle.bottom());
 
-                // Re-use color and draw a line underneath the target of the branch instruction.
                 painter->drawLine(label_underline_start, label_underline_end);
             }
-            painter->restore();
+
+            // Move x position forward.
             const QString token_text(token.token_text.c_str());
-            token_rectangle.adjust(option.fontMetrics.horizontalAdvance(token_text), 0, 0, 0);
+            paint_rectangle.adjust(option.fontMetrics.horizontalAdvance(token_text), 0, 0, 0);
 
             // Add a space if it is not the last token in the operand.
-            if (i < tokens.size() - 1)
+            if (j < operand_tokens.size() - 1)
             {
-                token_rectangle.adjust(option.fontMetrics.horizontalAdvance(IsaItemModel::kOperandTokenSpace), 0, 0, 0);
+                paint_rectangle.adjust(option.fontMetrics.horizontalAdvance(IsaItemModel::kOperandTokenSpace), 0, 0, 0);
             }
 
             token_index++;
         }
+
+        // Add a comma if it is not the last operand.
+        if (i < operand_groups_tokens.size() - 1)
+        {
+            PaintCommaText(paint_rectangle, painter);
+
+            paint_rectangle.adjust(option.fontMetrics.horizontalAdvance(QString(IsaItemModel::kOperandDelimiter)), 0, 0, 0);
+        }
+    }
+}
+
+void IsaItemDelegate::PaintLineNumber(QPainter* painter, const QModelIndex& source_index, QRectF paint_rectangle, const QStyleOptionViewItem& option) const
+{
+    const auto line_number_text = source_index.data(Qt::DisplayRole).toString() + IsaItemModel::kColumnPadding;
+
+    // Right align the line number to its column.
+    const int line_number_column_width = view_->header()->sectionSize(view_->header()->logicalIndex(0));
+    const int line_number_text_width   = option.fontMetrics.horizontalAdvance(line_number_text);
+    const int scroll_bar_position      = view_->horizontalScrollBar()->value();
+    const int line_number_x_position   = line_number_column_width - line_number_text_width - scroll_bar_position;
+
+    paint_rectangle.setX(line_number_x_position);
+    paint_rectangle.setWidth(option.fontMetrics.horizontalAdvance(line_number_text));
+
+    painter->drawText(paint_rectangle, Qt::Alignment(Qt::AlignLeft | Qt::AlignTop), line_number_text);
+}
+
+void IsaItemDelegate::PaintPinnedBlockLabel(QPainter*                   painter,
+                                            const QModelIndex&          source_index,
+                                            QRectF                      paint_rectangle,
+                                            const QStyleOptionViewItem& option,
+                                            const IsaProxyModel*        proxy_model) const
+{
+    // Get the parent isa block index that is off screen from the original instruction index.
+    const auto parent_op_code_source_index = source_index.parent().siblingAtColumn(IsaItemModel::kOpCode);
+    const auto parent_row_type             = parent_op_code_source_index.data(IsaItemModel::UserRoles::kRowTypeRole).value<IsaItemModel::RowType>();
+
+    AdjustPaintRectangle(paint_rectangle, parent_row_type, source_index, proxy_model, option.fontMetrics, true);
+
+    PaintText(painter, parent_op_code_source_index, paint_rectangle);
+}
+
+void IsaItemDelegate::PaintRowSelection(QPainter* painter, const QStyleOptionViewItem& option) const
+{
+    // If this row is selected or moused-over, render a highlight.
+
+    if ((((option.state & QStyle::State_Selected) != 0) || ((option.state & QStyle::State_MouseOver) != 0)))
+    {
+        option.widget->style()->drawPrimitive(QStyle::PE_PanelItemViewItem, &option, painter, option.widget);
+    }
+}
+
+QString IsaItemDelegate::GetIndexPlainText(const bool span_columns, const QModelIndex& source_index) const
+{
+    // Get the concatenated text of an index from its display role.
+
+    QString display_role_text;
+
+    if (span_columns)
+    {
+        // Text for rows that span columns (comments and isa labels) are stored in the op code column.
+
+        const auto op_code_source_index = source_index.siblingAtColumn(IsaItemModel::kOpCode);
+        display_role_text               = op_code_source_index.data(Qt::DisplayRole).toString();
+    }
+    else if (source_index.column() != IsaItemModel::Columns::kLineNumber)
+    {
+        // Allow text search highlighting for every column but line number.
+
+        display_role_text = source_index.data(Qt::DisplayRole).toString();
     }
 
-    return std::pair<int, QRectF>(token_index, token_rectangle);
+    return display_role_text;
+}
+
+void IsaItemDelegate::AdjustPaintRectangle(QRectF&                     paint_rectangle,
+                                           const IsaItemModel::RowType row_type,
+                                           const QModelIndex&          source_index,
+                                           const IsaProxyModel*        proxy_model,
+                                           const QFontMetrics          font_metrics,
+                                           const bool                  span_columns) const
+{
+    if (span_columns)
+    {
+        // Determine if a spanning row should start painting at the op code column or the line number column.
+        // Extend the rectangle to the end of the view.
+
+        const auto op_code_source_index = source_index.siblingAtColumn(IsaItemModel::kOpCode);
+        const auto op_code_proxy_index  = proxy_model->mapFromSource(op_code_source_index);
+        const bool is_comment           = row_type == IsaItemModel::RowType::kComment;
+        auto       x_position           = GetColumnSpanStartPosition(is_comment, op_code_proxy_index);
+
+        x_position -= view_->horizontalScrollBar()->value();
+
+        paint_rectangle.setX(x_position);
+        paint_rectangle.setWidth(view_->width() - paint_rectangle.x());
+    }
+    else if ((source_index.column() == IsaItemModel::kOpCode) && (row_type == IsaItemModel::RowType::kIsa) && (source_index.parent().isValid()))
+    {
+        // Advance the starting position of the text by a predefined indent for child instruction op codes not pinned to the top of the view.
+
+        paint_rectangle.setX(paint_rectangle.x() + font_metrics.horizontalAdvance(IsaItemModel::kOpCodeColumnIndent));
+    }
 }

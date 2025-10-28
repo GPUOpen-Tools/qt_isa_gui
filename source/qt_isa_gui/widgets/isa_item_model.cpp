@@ -56,28 +56,29 @@ namespace
                                                                                       {amdisa::GpuArchitecture::kRdna3, "amdgpu_isa_rdna3.xml"},
                                                                                       {amdisa::GpuArchitecture::kRdna3_5, "amdgpu_isa_rdna3_5.xml"},
                                                                                       {amdisa::GpuArchitecture::kRdna4, "amdgpu_isa_rdna4.xml"},
-                                                                                      {amdisa::GpuArchitecture::kCdna1, "amdgpu_isa_mi100.xml"},
-                                                                                      {amdisa::GpuArchitecture::kCdna2, "amdgpu_isa_mi200.xml"},
-                                                                                      {amdisa::GpuArchitecture::kCdna3, "amdgpu_isa_mi300.xml"}};
+                                                                                      {amdisa::GpuArchitecture::kCdna1, "amdgpu_isa_cdna1.xml"},
+                                                                                      {amdisa::GpuArchitecture::kCdna2, "amdgpu_isa_cdna2.xml"},
+                                                                                      {amdisa::GpuArchitecture::kCdna3, "amdgpu_isa_cdna3.xml"},
+                                                                                      {amdisa::GpuArchitecture::kCdna4, "amdgpu_isa_cdna4.xml"}};
 
     // Avoid repetitive string conversions.
     const std::string kOperandTokenSpaceStdString = IsaItemModel::kOperandTokenSpace.toStdString();
     const std::string kOperandDelimiterStdString  = IsaItemModel::kOperandDelimiter.toStdString();
 
-    // Single register operands; match negative value or absolute value too. Ex) s0 or -s0 or |s0|
-    const QRegularExpression kScalarRegisterExpression(QString("(-?)(") + QRegularExpression::escape("|") + QString("?)(s[0-9]+)(\\2)"));
-    const QRegularExpression kVectorRegisterExpression(QString("(-?)(") + QRegularExpression::escape("|") + QString("?)(v[0-9]+)(\\2)"));
+    // Single register operands; match negative value or absolute value or true 16 suffix too. Ex) s0 or -s0 or |s0| or s0.l
+    const QRegularExpression kScalarRegisterExpression(QString("(-?)(") + QRegularExpression::escape("|") + QString("?)(s[0-9]+)(\\.l|\\.h)?(\\2)"));
+    const QRegularExpression kVectorRegisterExpression(QString("(-?)(") + QRegularExpression::escape("|") + QString("?)(v[0-9]+)(\\.l|\\.h)?(\\2)"));
 
-    // The start of a pair of single register operands. Ex) [s0
+    // The start of a pair of single register operands. Ex) [s0 or  [-s0 or [|s0| or [s0.l
     const QRegularExpression kScalarPairStartRegisterExpression(QRegularExpression::escape("[") + QString("(-?)(") + QRegularExpression::escape("|") +
-                                                                QString("?)(s[0-9]+)(\\2)"));
+                                                                QString("?)(s[0-9]+)(\\.l|\\.h)?(\\2)"));
     const QRegularExpression kVectorPairStartRegisterExpression(QRegularExpression::escape("[") + QString("(-?)(") + QRegularExpression::escape("|") +
-                                                                QString("?)(v[0-9]+)(\\2)"));
+                                                                QString("?)(v[0-9]+)(\\.l|\\.h)?(\\2)"));
 
-    // The end of a pair of single register operands. Ex) s0]
-    const QRegularExpression kScalarPairEndRegisterExpression(QString("(-?)(") + QRegularExpression::escape("|") + QString("?)(s[0-9]+)(\\2)") +
+    // The end of a pair of single register operands. Ex) s0] or -s0] or |s0|] or s0.l]
+    const QRegularExpression kScalarPairEndRegisterExpression(QString("(-?)(") + QRegularExpression::escape("|") + QString("?)(s[0-9]+)(\\.l|\\.h)?(\\2)") +
                                                               QRegularExpression::escape("]"));
-    const QRegularExpression kVectorPairEndRegisterExpression(QString("(-?)(") + QRegularExpression::escape("|") + QString("?)(v[0-9]+)(\\2)") +
+    const QRegularExpression kVectorPairEndRegisterExpression(QString("(-?)(") + QRegularExpression::escape("|") + QString("?)(v[0-9]+)(\\.l|\\.h)?(\\2)") +
                                                               QRegularExpression::escape("]"));
 
     // Register range operands. Ex) s[0:1]
@@ -124,17 +125,18 @@ int IsaItemModel::rowCount(const QModelIndex& parent) const
 
     if (!parent.isValid())
     {
-        // The number of top-level nodes is the number of code blocks.
+        // The number of top-level nodes is the number of blocks.
         return static_cast<int>(blocks_.size());
     }
 
     if (!parent.parent().isValid())
     {
-        // The number of rows underneath a Code Block is the number of instructions in that Code Block.
+        // The number of rows underneath a block is the number of rows in that block.
         return static_cast<int>(blocks_.at(parent.row())->instruction_lines.size());
     }
 
-    // Instructions should not have any rows underneath them.
+    // This model currently only supports 1 level of hierarchy.
+    // So, child rows should not have any rows underneath them.
     return 0;
 }
 
@@ -147,13 +149,13 @@ QModelIndex IsaItemModel::index(int row, int column, const QModelIndex& parent) 
         return tree_index;
     }
 
-    // Code blocks are top level nodes; create an index with no internal data.
+    // Blocks are top level nodes; create an index with no internal data.
     if (!parent.isValid())
     {
         return createIndex(row, column, nullptr);
     }
 
-    // Individual instruction lines are child nodes; attach parent row index as internal data.
+    // Individual instruction/comment lines are child nodes; attach parent block pointer as internal data.
     return createIndex(row, column, (void*)blocks_[parent.row()].get());
 }
 
@@ -164,11 +166,11 @@ QModelIndex IsaItemModel::parent(const QModelIndex& index) const
         return QModelIndex();
     }
 
-    const InstructionBlock* code_block = static_cast<InstructionBlock*>(index.internalPointer());
+    const auto* parent_block = static_cast<Block*>(index.internalPointer());
 
-    if (code_block != nullptr)
+    if (parent_block != nullptr)
     {
-        return createIndex(code_block->position, 0);
+        return createIndex(parent_block->position, 0);
     }
 
     return QModelIndex();
@@ -222,69 +224,31 @@ QVariant IsaItemModel::data(const QModelIndex& index, int role) const
         // Default to color theme's text color.
         data.setValue(QtCommon::QtUtils::ColorTheme::Get().GetCurrentThemeColors().graphics_scene_text_color);
 
-        if (!index.parent().isValid() && index.column() == kOpCode)
+        const bool has_parent = index.parent().isValid();
+        const auto row_type = (!has_parent) ? blocks_.at(index.row())->row_type : blocks_.at(index.parent().row())->instruction_lines.at(index.row())->row_type;
+
+        if (row_type == RowType::kComment && index.column() != kLineNumber)
         {
-            // Provide a different starting color for code block comments and code block labels with matching branching instructions.
+            // This is a child or parent comment; provide light blue as its text color.
 
-            const auto block = blocks_.at(index.row());
+            const auto color_theme   = QtCommon::QtUtils::ColorTheme::Get().GetColorTheme();
+            const auto comment_color = (color_theme == kColorThemeTypeLight) ? kIsaLightThemeColorLightBlue : kIsaDarkThemeColorLightBlue;
 
-            if (block->row_type == RowType::kComment)
-            {
-                QColor comment_color;
-                if (QtCommon::QtUtils::ColorTheme::Get().GetColorTheme() == kColorThemeTypeLight)
-                {
-                    comment_color = kIsaLightThemeColorLightBlue;
-                }
-                else
-                {
-                    comment_color = kIsaDarkThemeColorLightBlue;
-                }
-
-                // This is a code block comment; provide light blue as its text color.
-                data.setValue(comment_color);
-            }
-            else if (block->row_type == RowType::kCode)
-            {
-                const auto code_block = std::static_pointer_cast<InstructionBlock>(block);
-
-                if (!code_block->mapped_branch_instructions.empty())
-                {
-                    // This is a code block label that is called by a branch instruction(s); provide purple as its text color.
-                    QColor label_color;
-
-                    if (QtCommon::QtUtils::ColorTheme::Get().GetColorTheme() == kColorThemeTypeLight)
-                    {
-                        label_color = kIsaLightThemeColorDarkMagenta;
-                    }
-                    else
-                    {
-                        label_color = kIsaDarkThemeColorDarkMagenta;
-                    }
-
-                    data.setValue(label_color);
-                }
-            }
+            data.setValue(comment_color);
         }
-        else if (index.parent().isValid() && index.column() != kLineNumber)
+        else if ((row_type == RowType::kIsa) && (!has_parent) && (index.column() == kOpCode))
         {
-            // Provide a different starting color for child row comments
+            // Provide purple as the text color for parent isa block labels with matching branching instructions.
 
-            const auto row = blocks_.at(index.parent().row())->instruction_lines.at(index.row());
+            const auto block     = blocks_.at(index.row());
+            const auto isa_block = std::static_pointer_cast<InstructionBlock>(block);
 
-            if (row->row_type == RowType::kComment)
+            if (!isa_block->mapped_branch_instructions.empty())
             {
-                QColor comment_color;
+                const auto color_theme = QtCommon::QtUtils::ColorTheme::Get().GetColorTheme();
+                const auto label_color = (color_theme == kColorThemeTypeLight) ? kIsaLightThemeColorDarkMagenta : kIsaDarkThemeColorDarkMagenta;
 
-                if (QtCommon::QtUtils::ColorTheme::Get().GetColorTheme() == kColorThemeTypeLight)
-                {
-                    comment_color = kIsaLightThemeColorLightBlue;
-                }
-                else
-                {
-                    comment_color = kIsaDarkThemeColorLightBlue;
-                }
-
-                data.setValue(comment_color);
+                data.setValue(label_color);
             }
         }
 
@@ -302,12 +266,10 @@ QVariant IsaItemModel::data(const QModelIndex& index, int role) const
 
             if (!parent_index.isValid())
             {
-                // Code block.
                 line_number = blocks_.at(index.row())->line_number;
             }
             else
             {
-                // Instruction line.
                 line_number = blocks_.at(parent_index.row())->instruction_lines.at(index.row())->line_number;
             }
 
@@ -326,7 +288,7 @@ QVariant IsaItemModel::data(const QModelIndex& index, int role) const
 
                     data.setValue(QString(comment_block->text.c_str()));
                 }
-                else if (block->row_type == RowType::kCode)
+                else if (block->row_type == RowType::kIsa)
                 {
                     const auto code_block = std::static_pointer_cast<InstructionBlock>(block);
 
@@ -337,7 +299,7 @@ QVariant IsaItemModel::data(const QModelIndex& index, int role) const
             {
                 const auto row = blocks_.at(index.parent().row())->instruction_lines.at(index.row());
 
-                if (row->row_type == RowType::kCode)
+                if (row->row_type == RowType::kIsa)
                 {
                     const auto instruction = std::static_pointer_cast<InstructionRow>(row);
 
@@ -355,7 +317,7 @@ QVariant IsaItemModel::data(const QModelIndex& index, int role) const
         }
         case kOperands:
         {
-            if (index.parent().isValid() && (blocks_.at(index.parent().row())->instruction_lines.at(index.row())->row_type == RowType::kCode))
+            if (index.parent().isValid() && (blocks_.at(index.parent().row())->instruction_lines.at(index.row())->row_type == RowType::kIsa))
             {
                 const auto  instruction = std::static_pointer_cast<InstructionRow>(blocks_.at(index.parent().row())->instruction_lines.at(index.row()));
                 const auto& operand_token_groups = instruction->operand_tokens;
@@ -388,10 +350,8 @@ QVariant IsaItemModel::data(const QModelIndex& index, int role) const
         }
         case kPcAddress:
         {
-            if (index.parent().isValid() && (blocks_.at(index.parent().row())->instruction_lines.at(index.row())->row_type == RowType::kCode))
+            if (index.parent().isValid() && (blocks_.at(index.parent().row())->instruction_lines.at(index.row())->row_type == RowType::kIsa))
             {
-                // Instruction line.
-
                 const auto instruction = std::static_pointer_cast<InstructionRow>(blocks_.at(index.parent().row())->instruction_lines.at(index.row()));
 
                 data.setValue(QString(instruction->pc_address.c_str()));
@@ -401,10 +361,8 @@ QVariant IsaItemModel::data(const QModelIndex& index, int role) const
         }
         case kBinaryRepresentation:
         {
-            if (index.parent().isValid() && (blocks_.at(index.parent().row())->instruction_lines.at(index.row())->row_type == RowType::kCode))
+            if (index.parent().isValid() && (blocks_.at(index.parent().row())->instruction_lines.at(index.row())->row_type == RowType::kIsa))
             {
-                // Instruction line.
-
                 const auto instruction = std::static_pointer_cast<InstructionRow>(blocks_.at(index.parent().row())->instruction_lines.at(index.row()));
 
                 data.setValue(QString(instruction->binary_representation.c_str()));
@@ -421,31 +379,31 @@ QVariant IsaItemModel::data(const QModelIndex& index, int role) const
     }
     case Qt::UserRole:
     {
-        // Use UserRole to store data needed for delegates to custom paint instruction rows.
+        // Use UserRole to store data needed for delegates to custom paint rows.
         //
         // Store tokens for instructions.
         // Store nothing for comments.
 
         if (!index.parent().isValid())
         {
-            std::vector<Token> tokens;
-
             const auto block = blocks_.at(index.row());
 
-            if (block->row_type == RowType::kCode)
+            if (block->row_type == RowType::kIsa)
             {
                 const auto code_block = std::static_pointer_cast<InstructionBlock>(block);
 
-                tokens.push_back(code_block->token);
-            }
+                std::vector<Token> tokens;
 
-            data.setValue(tokens);
+                tokens.push_back(code_block->token);
+
+                data.setValue(tokens);
+            }
         }
         else
         {
             const auto row = blocks_.at(index.parent().row())->instruction_lines.at(index.row());
 
-            if (row->row_type == RowType::kCode)
+            if (row->row_type == RowType::kIsa)
             {
                 const auto instruction = std::static_pointer_cast<InstructionRow>(row);
 
@@ -474,7 +432,7 @@ QVariant IsaItemModel::data(const QModelIndex& index, int role) const
         {
             const auto block = blocks_.at(index.row());
 
-            if (block->row_type == RowType::kCode)
+            if (block->row_type == RowType::kIsa)
             {
                 const auto code_block             = std::static_pointer_cast<InstructionBlock>(block);
                 is_code_block_label_branch_target = !code_block->mapped_branch_instructions.empty();
@@ -494,7 +452,7 @@ QVariant IsaItemModel::data(const QModelIndex& index, int role) const
             {
                 const auto block = blocks_.at(index.row());
 
-                if (block->row_type == RowType::kCode)
+                if (block->row_type == RowType::kIsa)
                 {
                     const auto code_block = std::static_pointer_cast<InstructionBlock>(block);
 
@@ -512,11 +470,9 @@ QVariant IsaItemModel::data(const QModelIndex& index, int role) const
         {
             if (index.parent().isValid())
             {
-                // Instruction line.
-
                 const auto row = blocks_.at(index.parent().row())->instruction_lines.at(index.row());
 
-                if (row->row_type == RowType::kCode)
+                if (row->row_type == RowType::kIsa)
                 {
                     const auto instruction = std::static_pointer_cast<const InstructionRow>(row);
 
@@ -547,7 +503,7 @@ QVariant IsaItemModel::data(const QModelIndex& index, int role) const
         {
             const auto row = blocks_.at(index.parent().row())->instruction_lines.at(index.row());
 
-            if (row->row_type == RowType::kCode)
+            if (row->row_type == RowType::kIsa)
             {
                 const auto instruction = std::static_pointer_cast<InstructionRow>(row);
                 line_enabled           = instruction->enabled;
@@ -647,9 +603,9 @@ void IsaItemModel::CacheSizeHints()
         {
             line_number_corresponding_indices_.emplace_back(code_block_index, instruction_index++);
 
-            if (instruction->row_type == RowType::kComment)
+            if (instruction->row_type != RowType::kIsa)
             {
-                // Don't force comments to fit in the op code column.
+                // Don't force non isa rows to fit in the op code column.
                 continue;
             }
 
@@ -802,7 +758,7 @@ void IsaItemModel::ClearBranchInstructionMapping()
 {
     for (auto block : blocks_)
     {
-        if (block->row_type != RowType::kCode)
+        if (block->row_type != RowType::kIsa)
         {
             continue;
         }
@@ -824,13 +780,13 @@ void IsaItemModel::MapBlocksToBranchInstructions()
 
     code_block_label_to_index_.clear();
 
-    // Build map of code block label -> code block index.
+    // Build map of isa block label -> isa block index.
 
     for (size_t block_index = 0; block_index < blocks_.size(); block_index++)
     {
         const auto block = blocks_.at(block_index);
 
-        if (block->row_type != RowType::kCode)
+        if (block->row_type != RowType::kIsa)
         {
             continue;
         }
@@ -845,7 +801,7 @@ void IsaItemModel::MapBlocksToBranchInstructions()
     {
         const auto block = blocks_.at(block_index);
 
-        if (block->row_type != RowType::kCode)
+        if (block->row_type != RowType::kIsa)
         {
             continue;
         }
@@ -856,7 +812,7 @@ void IsaItemModel::MapBlocksToBranchInstructions()
         {
             const auto row = code_block->instruction_lines.at(instruction_index);
 
-            if (row->row_type != RowType::kCode)
+            if (row->row_type != RowType::kIsa)
             {
                 continue;
             }
@@ -878,11 +834,11 @@ void IsaItemModel::MapBlocksToBranchInstructions()
                     const auto branch_target_block       = blocks_.at(branch_target_block_index);
                     auto       branch_target_code_block  = std::static_pointer_cast<IsaItemModel::InstructionBlock>(blocks_.at(branch_target_block_index));
 
-                    // Code block remembers which branch instruction targeted it.
+                    // Isa block remembers which branch instruction targeted it.
                     branch_target_code_block->mapped_branch_instructions.emplace_back(
                         std::make_pair(static_cast<uint32_t>(block_index), static_cast<uint32_t>(instruction_index)));
 
-                    // Branch instruction remembers which code block is its target.
+                    // Branch instruction remembers which isa block is its target.
                     instruction->operand_tokens.front().front().start_register_index = branch_target_block_index;
                 }
             }
@@ -1133,7 +1089,7 @@ IsaItemModel::CommentRow::~CommentRow()
 }
 
 IsaItemModel::InstructionRow::InstructionRow(uint32_t line, std::string op, std::string address, std::string representation)
-    : Row(RowType::kCode, line)
+    : Row(RowType::kIsa, line)
     , pc_address(address)
     , binary_representation(representation)
     , enabled(true)
@@ -1145,10 +1101,10 @@ IsaItemModel::InstructionRow::~InstructionRow()
 {
 }
 
-IsaItemModel::Block::Block(RowType type, int block_position, uint32_t shader_line_number)
+IsaItemModel::Block::Block(RowType type, int block_position, uint32_t line)
     : row_type(type)
     , position(block_position)
-    , line_number(shader_line_number)
+    , line_number(line)
 {
 }
 
@@ -1156,8 +1112,8 @@ IsaItemModel::Block::~Block()
 {
 }
 
-IsaItemModel::CommentBlock::CommentBlock(int block_position, uint32_t shader_line_number, std::string comment_text)
-    : Block(RowType::kComment, block_position, shader_line_number)
+IsaItemModel::CommentBlock::CommentBlock(int block_position, uint32_t line, std::string comment_text)
+    : Block(RowType::kComment, block_position, line)
     , text(comment_text)
 {
 }
@@ -1166,8 +1122,8 @@ IsaItemModel::CommentBlock::~CommentBlock()
 {
 }
 
-IsaItemModel::InstructionBlock::InstructionBlock(int block_position, uint32_t shader_line_number, std::string block_label)
-    : Block(RowType::kCode, block_position, shader_line_number)
+IsaItemModel::InstructionBlock::InstructionBlock(int block_position, uint32_t line, std::string block_label)
+    : Block(RowType::kIsa, block_position, line)
 {
     token.token_text       = block_label;
     token.type             = IsaItemModel::TokenType::kLabelType;

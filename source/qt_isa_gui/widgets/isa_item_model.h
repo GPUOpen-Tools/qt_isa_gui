@@ -25,8 +25,8 @@ class IsaTreeView;
 /// @brief IsaItemModel is an item model that stores shader isa and comments, intended to be displayed in a tree view.
 ///
 /// It supports 1 level of parenting hierarchy.
-/// A parent row can be an isa instruction block or a comment block.
-/// A child row can be an instruction or a comment.
+/// Parent rows are either isa block labels or comment blocks.
+/// Child rows are either instructions or comments.
 class IsaItemModel : public QAbstractItemModel
 {
     Q_OBJECT
@@ -60,15 +60,15 @@ public:
         kBranchIndexRole,                     // List of source model indices of the corresponding branch instruction or label.
         kLineEnabledRole,                     // true if the index is an instruction that should be color coded, false if it should not be color coded.
         kRowTypeRole,                         // Type of row the index is from.
-        kDecodedIsa,
+        kDecodedIsa,                          // Decoded isa instruction info bundle from an index.
         kUserRolesCount
     };
 
     /// @brief Predefined row types.
     enum class RowType
     {
-        kCode = 0,  ///< Parent code block or child instruction.
-        kComment,   ///< Parent comment block or child comment.
+        kIsa = 0,  ///< Parent isa block or child instruction.
+        kComment,  ///< Parent comment block or child comment.
         kRowCount
     };
 
@@ -309,7 +309,7 @@ protected:
         virtual ~Row() = 0;
 
         RowType  row_type;     ///< The type of this row.
-        uint32_t line_number;  ///< Line # relative to the entire shader.
+        uint32_t line_number;  ///< Line number relative to all text currently displayed.
     };
 
     /// @brief CommentRow is a convenience class meant to represent 1 line of comment, as a child row.
@@ -328,7 +328,7 @@ protected:
         std::string text;  ///< The text of this comment.
     };
 
-    /// @brief InstructionRow is a convenience class meant to represent 1 line of instruction, as a child row.
+    /// @brief InstructionRow is a convenience class meant to represent 1 line of isa, as a child row.
     class InstructionRow final : public Row
     {
     public:
@@ -356,10 +356,10 @@ protected:
     public:
         /// @brief Constructor.
         ///
-        /// @param [in] type               The type of this row.
-        /// @param [in] block_position     This block's position in the current shader.
-        /// @param [in] shader_line_number This blocks line number relative to the entire shader.
-        Block(RowType type, int block_position, uint32_t shader_line_number);
+        /// @param [in] type           The type of this row.
+        /// @param [in] block_position This block's position in the current shader.
+        /// @param [in] line           This blocks line number.
+        Block(RowType type, int block_position, uint32_t line);
 
         Block()                        = delete;
         Block(const Block&)            = delete;
@@ -371,9 +371,9 @@ protected:
         virtual ~Block() = 0;
 
         RowType                           row_type;           ///< The type of this row.
-        int                               position;           ///< This code block's index into this model's data structure.
-        uint32_t                          line_number;        ///< Line # relative to the entire shader.
-        std::vector<std::shared_ptr<Row>> instruction_lines;  ///< All instruction lines that belong to this code block.
+        int                               position;           ///< This block's index into this model's data structure.
+        uint32_t                          line_number;        ///< Line number relative to all text currently displayed.
+        std::vector<std::shared_ptr<Row>> instruction_lines;  ///< All instruction lines that belong to this block.
     };
 
     /// @brief CommentBlock is a convenience class meant to represent a block of comments.
@@ -384,10 +384,10 @@ protected:
     public:
         /// @brief Constructor.
         ///
-        /// @param [in] block_position     This block's position in the current shader.
-        /// @param [in] shader_line_number This blocks line number relative to the entire shader.
-        /// @param [in] comment_text       This comment block's label.
-        CommentBlock(int block_position, uint32_t shader_line_number, std::string comment_text);
+        /// @param [in] block_position This block's position in the current shader.
+        /// @param [in] line_number    This blocks line number.
+        /// @param [in] comment_text   This comment block's label.
+        CommentBlock(int block_position, uint32_t line_number, std::string comment_text);
 
         CommentBlock()                               = delete;
         CommentBlock(const CommentBlock&)            = delete;
@@ -409,10 +409,10 @@ protected:
     public:
         /// @brief Constructor.
         ///
-        /// @param [in] block_position     This block's position in the current shader.
-        /// @param [in] shader_line_number This blocks line number relative to the entire shader.
-        /// @param [in] block_label        This instruction block's label.
-        InstructionBlock(int block_position, uint32_t shader_line_number, std::string block_label);
+        /// @param [in] block_position This block's position in the current shader.
+        /// @param [in] line           This blocks line number.
+        /// @param [in] block_label    This instruction block's label.
+        InstructionBlock(int block_position, uint32_t line, std::string block_label);
 
         InstructionBlock()                                   = delete;
         InstructionBlock(const InstructionBlock&)            = delete;
@@ -428,7 +428,9 @@ protected:
         std::vector<std::pair<uint32_t, uint32_t>> mapped_branch_instructions;  ///< Map this block to corresponding jump instruction indices.
     };
 
-    std::vector<std::shared_ptr<Block>> blocks_;  ///< Isa stored in this model as a container of a convenience data structure.
+    using ShaderIsaBlocks = std::vector<std::shared_ptr<Block>>;
+
+    ShaderIsaBlocks blocks_;  ///< Isa stored in this model as a container of a convenience data structure.
 
     std::unordered_map<std::string, int> code_block_label_to_index_;  ///< Map code block label names to their index into all blocks.
 

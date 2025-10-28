@@ -52,10 +52,7 @@ public:
     /// @param [in] isa_model                The isa item model.
     /// @param [in] isa_view                 The optional isa tree view.
     /// @param [in] proxy_model              The optional proxy model.
-    void SetModelAndView(QWidget*       navigation_widget_parent,
-                         IsaItemModel*  isa_model,
-                         IsaTreeView*   isa_view    = nullptr,
-                         IsaProxyModel* proxy_model = nullptr);
+    void SetModelAndView(QWidget* navigation_widget_parent, IsaItemModel* isa_model, IsaTreeView* isa_view = nullptr, IsaProxyModel* proxy_model = nullptr);
 
     /// @brief Remember any scroll areas that should affect the isa tooltip's visibility.
     ///
@@ -212,7 +209,7 @@ private:
         /// @brief Sets the line count for validator.
         ///
         /// @param [in] count The line count.
-        void SetLineCount(int count)
+        inline void SetLineCount(int count)
         {
             line_count_ = count;
         }

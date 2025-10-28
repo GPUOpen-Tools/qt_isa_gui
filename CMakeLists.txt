@@ -4,7 +4,7 @@ project(QtIsaGui)
 
 # Define version information
 set(QTISAGUI_MAJOR_VERSION 1)
-set(QTISAGUI_MINOR_VERSION 1)
+set(QTISAGUI_MINOR_VERSION 2)
 
 if (NOT QTISAGUI_PATCH_NUMBER)
     set(QTISAGUI_PATCH_NUMBER 0)

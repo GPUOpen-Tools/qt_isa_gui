@@ -28,14 +28,14 @@ class IsaItemDelegate : public QStyledItemDelegate
     Q_OBJECT
 
 public:
-    /// @brief Constructor.
+    /// @brief Constructor; create the isa description tooltip.
     ///
     /// @param [in] view   The corresponding tree view.
     /// @param [in] parent The parent object.
     IsaItemDelegate(IsaTreeView* view, QObject* parent = nullptr);
 
     /// @brief Destructor.
-    ~IsaItemDelegate();
+    ~IsaItemDelegate() = default;
 
     /// @brief Remember any scroll areas that should affect the isa tooltip's visibility.
     ///
@@ -44,22 +44,28 @@ public:
     /// @param [in] container_scroll_areas The scroll areas to remember.
     void RegisterScrollAreas(std::vector<QScrollArea*> container_scroll_areas);
 
-    /// @brief Override editor event in order to track mouse moves and mouse clicks over code block labels and selectable tokens.
+    /// @brief Override editor event in order to track mouse moves and mouse clicks over isa block labels and selectable tokens.
     ///
     /// @param [in] event  The event that triggered editing.
     /// @param [in] model  The model.
-    /// @param [in] option The option used to render the item.
+    /// @param [in] option The option used to paint the item.
     /// @param [in] index  The index of the item.
     ///
-    /// @return true.
-    bool editorEvent(QEvent* event, QAbstractItemModel* model, const QStyleOptionViewItem& option, const QModelIndex& index) Q_DECL_OVERRIDE;
+    /// @return true if an isa block label was clicked, and false otherwise.
+    virtual bool editorEvent(QEvent* event, QAbstractItemModel* model, const QStyleOptionViewItem& option, const QModelIndex& index) Q_DECL_OVERRIDE;
 
-    /// @brief Override paint to custom render isa text.
+    /// @brief Override paint to custom paint columns defined in the base isa model.
+    ///
+    /// Pin isa block labels to the top of the viewport if an instruction is visible but its parent block is off screen.
+    /// Standard row selection effect.
+    /// Highlight effect for any text search matches.
+    /// Different look for comments and color coded isa tokens.
+    /// Highlight effect for selected isa tokens.
     ///
     /// @param [in] painter     The painter.
-    /// @param [in] option      The option used to render the item.
-    /// @param [in] model_index The index to render.
-    void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& model_index) const Q_DECL_OVERRIDE;
+    /// @param [in] option      The option used to paint the item.
+    /// @param [in] proxy_index The index to paint.
+    virtual void paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& proxy_index) const Q_DECL_OVERRIDE;
 
     /// @brief Override sizeHint to cache text width to improve performance.
     ///
@@ -95,16 +101,14 @@ public slots:
     void ConnectTooltipTimerCallback(bool connect_timer);
 
 protected:
-    /// @brief Determines if the source model index is at the top of its corresponding tree viewport and is a child row.
+    /// @brief Determines if the index is at the top of its corresponding tree viewport and is a child row.
     ///
     /// If the index is at the top and is a child, the parent label will be pinned there instead.
     ///
-    /// @param [in]  source_model_index     The source model index.
-    /// @param [in]  proxy_model_index      The proxy model index.
-    /// @param [out] proxy_index_y_position The y position of the proxy model index.
+    /// @param [in]  proxy_index The proxy model index.
     ///
     /// @return true if the index is a child index and at the top of the corresponding tree view, false if not.
-    bool BlockLabelPinnedToTop(const QModelIndex& source_model_index, const QModelIndex& proxy_model_index, int& proxy_index_y_position) const;
+    bool BlockLabelPinnedToTop(const QModelIndex& proxy_index) const;
 
     /// @brief Check if the text provided matches the current search text and paint a rectangle highlight over all matches.
     ///
@@ -135,9 +139,9 @@ private:
     /// @param [out] local_x_position The x position of a mouse event; will be changed if the given index spans columns to be relative to the op code column.
     void AdjustXPositionForSpannedColumns(const QModelIndex& index, const QSortFilterProxyModel* proxy, QModelIndex& source_index, qreal& local_x_position);
 
-    /// @brief Helper to get the starting painting position of indicies that span across columns.
+    /// @brief Helper to get the starting painting position of indices that span across columns.
     ///
-    /// @param [in] is_comment  true if the index belongs to a comment, false otherwise.
+    /// @param [in] is_comment  Whether the index belongs to a comment.
     /// @param [in] proxy_index The proxy index to check.
     ///
     /// @return The x position at which painting should start for the index's row that spans across all columns.
@@ -168,8 +172,7 @@ private:
     /// @param [in]  local_x_position The local viewport x position, relative to the index, of the mouse move event.
     bool SetBranchLabelTokenUnderMouse(const QModelIndex& source_index, const int local_x_position);
 
-    /// @brief Helper function to help paint a highlight behind the token that is currently underneath the mouse cursor.
-    ///        This function first checks if the requested token is underneath the mouse, and if it is, paints a highlight behind it.
+    /// @brief Helper to paint a highlight behind tokens that match the currently selected token or if a token is underneath the mouse cursor.
     ///
     /// @param [in] token               The token to check.
     /// @param [in] isa_token_rectangle The token's rectangle.
@@ -186,31 +189,74 @@ private:
                              int                        instruction_index,
                              int                        token_index) const;
 
-    /// @brief Helper function to paint the text of a list of isa tokens or isa comments.
+    /// @brief Helper to determine how to paint model text based on the row type and column index.
     ///
-    /// @param [in] painter         The QPainter that will be used for painting.
-    /// @param [in] option          The style option for determining font metrics.
-    /// @param [in] source_index    The source model index to paint for.
-    /// @param [in] token_rectangle The rectangle where the token text will be drawn.
-    /// @param [in] tokens          The list of tokens to be painted.
-    /// @param [in] token_index     The starting index of the token in the double vector of tokens. Zero if there is only a singe vector.
-    /// @param [in] is_comment      true if painting comment text, false if painting an instruction's tokens.
-    ///
-    /// @return A pair of the final token index and text rectangle for when painting a double vector of tokens.
-    std::pair<int, QRectF> PaintText(QPainter*                        painter,
-                                     const QStyleOptionViewItem&      option,
-                                     const QModelIndex&               source_index,
-                                     QRectF                           token_rectangle,
-                                     std::vector<IsaItemModel::Token> tokens,
-                                     int                              token_index,
-                                     bool                             is_comment) const;
+    /// @param [in] painter         The QPainter to use to paint.
+    /// @param [in] source_index    The source index to paint for.
+    /// @param [in] paint_rectangle The rectangle to paint in.
+    void PaintText(QPainter* painter, const QModelIndex& source_index, QRectF paint_rectangle) const;
 
-    /// @brief Helper function to paint an isa opcode or isa comments in a spanned column.
+    /// @brief Helper to assist painting isa rows. Paint the operands in an instruction row as a series of color coded tokens.
     ///
-    /// @param [in] painter    The QPainter that will be used for painting.
-    /// @param [in] option     The style option for determining font metrics.
-    /// @param [in] x_position The x position to start painting the spanning text.
-    void PaintSpanned(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& source_index, int x_position) const;
+    /// @param [in] painter         The QPainter to use to paint.
+    /// @param [in] source_index    The source index to paint for.
+    /// @param [in] paint_rectangle The rectangle to paint in.
+    /// @param [in] option          The style option.
+    void PaintOperands(QPainter* painter, const QModelIndex& source_index, QRectF paint_rectangle, const QStyleOptionViewItem& option) const;
+
+    /// @brief Helper to paint line numbers.
+    ///
+    /// @param [in] painter         The QPainter to use to paint.
+    /// @param [in] source_index    The source index to paint for.
+    /// @param [in] paint_rectangle The rectangle to paint in.
+    /// @param [in] option          The style option.
+    void PaintLineNumber(QPainter* painter, const QModelIndex& source_index, QRectF paint_rectangle, const QStyleOptionViewItem& option) const;
+
+    /// @brief Helper to paint parent isa block labels as if they are pinned to the top of the tree's viewport.
+    ///
+    /// @param [in] painter         The QPainter to use to paint.
+    /// @param [in] source_index    The source index to paint for.
+    /// @param [in] paint_rectangle The rectangle to paint in.
+    /// @param [in] option          The style option.
+    /// @param [in] proxy_model     The proxy model.
+    void PaintPinnedBlockLabel(QPainter*                   painter,
+                               const QModelIndex&          source_index,
+                               QRectF                      paint_rectangle,
+                               const QStyleOptionViewItem& option,
+                               const IsaProxyModel*        proxy_model) const;
+
+    /// @brief Helper to paint the standard view row selection effect.
+    ///
+    /// @param [in] painter The QPainter to use to paint.
+    /// @param [in] option  The style option.
+    void PaintRowSelection(QPainter* painter, const QStyleOptionViewItem& option) const;
+
+    /// @brief Helper to get the plain text of a given index.
+    ///
+    /// @param [in] span_columns true if the index spans all columns, false otherwise.
+    /// @param [in] source_index The source index to get plain text for.
+    ///
+    /// @return The plain text of the index.
+    QString GetIndexPlainText(const bool span_columns, const QModelIndex& source_index) const;
+
+    /// @brief Helper to modify the geometry of the rectangle used to paint an index.
+    ///
+    /// For spanning indices, make the rectangle fit the entire width of the tree view.
+    /// Also change the starting x position depending on the type of row and visibility of op code column.
+    /// For op codes indices, advance the starting x position by a predefined indent offset.
+    ///
+    /// @param [in, out] paint_rectangle The rectangle to adjust the geometry of.
+    /// @param [in]      row_type        The type of the row.
+    /// @param [in]      source_index    The source index.
+    /// @param [in]      proxy_model     The proxy model.
+    /// @param [in]      font_metrics    The font metrics.
+    /// @param [in]      span_columns    true if spanning columns, false otherwise.
+    void AdjustPaintRectangle(QRectF&                     paint_rectangle,
+                              const IsaItemModel::RowType row_type,
+                              const QModelIndex&          source_index,
+                              const IsaProxyModel*        proxy_model,
+                              const QFontMetrics          font_metrics,
+                              const bool                  span_columns) const;
 
     IsaItemModel::Token mouse_over_isa_token_;  ///< Track the token that the mouse is over.
     IsaItemModel::Token selected_isa_token_;    ///< Track the selected token.

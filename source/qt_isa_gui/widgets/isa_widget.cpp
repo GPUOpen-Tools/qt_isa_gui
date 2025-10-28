@@ -312,32 +312,23 @@ void IsaWidget::UpdateSpannedColumns()
         return;
     }
 
-    const QAbstractItemModel* source_model = proxy_model_->sourceModel();
-
-    for (int i = 0; i < source_model->rowCount(); i++)
+    for (int proxy_parent_row = 0; proxy_parent_row < proxy_model_->rowCount(); proxy_parent_row++)
     {
-        const int proxy_row = proxy_model_->mapFromSource(source_model->index(i, IsaItemModel::kOpCode)).row();
+        // All parent labels (isa blocks or comments) should span across all columns.
 
-        // All parent labels (code blocks or comments) should span across columns.
-        ui_->isa_tree_view_->setFirstColumnSpanned(proxy_row, QModelIndex(), true);
+        ui_->isa_tree_view_->setFirstColumnSpanned(proxy_parent_row, QModelIndex(), true);
 
-        const QModelIndex source_parent_index = source_model->index(i, IsaItemModel::kLineNumber);
+        const QModelIndex proxy_parent_index = proxy_model_->index(proxy_parent_row, IsaItemModel::kLineNumber);
 
-        for (int j = 0; j < source_model->rowCount(source_parent_index); j++)
+        for (int proxy_child_row = 0; proxy_child_row < proxy_model_->rowCount(proxy_parent_index); proxy_child_row++)
         {
-            QModelIndex source_child_index = source_model->index(j, IsaItemModel::kOpCode, source_parent_index);
-            const auto  row_type           = qvariant_cast<IsaItemModel::RowType>(source_child_index.data(IsaItemModel::kRowTypeRole));
-            bool        spanned            = false;
-
-            if (row_type == IsaItemModel::RowType::kComment)
-            {
-                spanned = true;
-            }
-
-            const int proxy_child_row = proxy_model_->mapFromSource(source_child_index).row();
-
             // Child comments should span across columns.
-            ui_->isa_tree_view_->setFirstColumnSpanned(proxy_child_row, proxy_model_->mapFromSource(source_parent_index), spanned);
+
+            const QModelIndex proxy_child_index = proxy_model_->index(proxy_child_row, IsaItemModel::kOpCode, proxy_parent_index);
+            const auto        row_type          = qvariant_cast<IsaItemModel::RowType>(proxy_child_index.data(IsaItemModel::kRowTypeRole));
+            const bool        spanned           = row_type == IsaItemModel::RowType::kComment;
+
+            ui_->isa_tree_view_->setFirstColumnSpanned(proxy_child_row, proxy_parent_index, spanned);
         }
     }
     ui_->isa_tree_view_->ClearLastPinnedndex();
