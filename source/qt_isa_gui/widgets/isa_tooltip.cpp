@@ -1,5 +1,5 @@
 //=============================================================================
-// Copyright (c) 2024-2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2024-2026 Advanced Micro Devices, Inc. All rights reserved.
 /// @author AMD Developer Tools Team
 /// @file
 /// @brief Implementation for an isa tooltip.
@@ -73,8 +73,8 @@ IsaTooltip::~IsaTooltip()
 void IsaTooltip::UpdateText(const amdisa::InstructionInfo& decoded_info)
 {
     const auto    op_code               = QString(decoded_info.instruction_name.c_str()).toLower().toStdString();
-    const auto    functional_group      = decoded_info.functional_group_subgroup_info.IsaFunctionalGroup;
-    const QString functional_group_name = amdisa::kFunctionalGroupName[static_cast<int>(functional_group)];
+    const auto    functional_group      = decoded_info.functional_group_subgroup_info.isa_functional_group;
+    const QString functional_group_name = amdisa::FunctionalGroupNames[static_cast<int>(functional_group)];
     const QString description           = decoded_info.instruction_description.c_str();
     const QString encodings             = decoded_info.encoding_name.c_str();
 

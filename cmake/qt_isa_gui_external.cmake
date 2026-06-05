@@ -6,8 +6,8 @@
 include(FetchContent)
 
 set (GITHUB_REPO_PREFIX "https://github.com/GPUOpen-Tools")
-set (QT_COMMON_BRANCH "v4.4.0")
-set (ISA_SPEC_MANAGER_BRANCH "46192e668545db3c24876af39c24a52ff36b3887")
+set (QT_COMMON_BRANCH "v4.5.0")
+set (ISA_SPEC_MANAGER_BRANCH "507111dea876c3d4d268c1c86344835446791e41")
 
 if (NOT TARGET QtCustomWidgets AND NOT TARGET QtUtils)
     if (NOT QTCOMMON_DIR)
@@ -39,6 +39,7 @@ if (NOT TARGET isa_decoder)
     endif ()
     
     set(ISA_DECODER_XML_URL "https://gpuopen.com/download/machine-readable-isa/latest")
+
     set(ISA_DECODER_XML_DIR "${PROJECT_SOURCE_DIR}/external/isa_spec_xml")
 
     FetchContent_Declare(

@@ -1,5 +1,5 @@
 //=============================================================================
-// Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2022-2026 Advanced Micro Devices, Inc. All rights reserved.
 /// @author AMD Developer Tools Team
 /// @file
 /// @brief Implementation for an isa item delegate.
@@ -303,7 +303,7 @@ void IsaItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
     {
         // Pin instructions' block label to the top of the viewport and paint them instead of painting the instruction.
 
-        PaintPinnedBlockLabel(painter, source_index, paint_rectangle, initialized_option, proxy_model);
+        PaintPinnedBlockLabel(painter, source_index, paint_rectangle, proxy_model);
 
         painter->restore();
         return;
@@ -318,11 +318,12 @@ void IsaItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
         return;
     }
 
-    const auto row_type          = source_index.data(IsaItemModel::UserRoles::kRowTypeRole).value<IsaItemModel::RowType>();
-    const auto span_columns      = view_->isFirstColumnSpanned(proxy_index.row(), proxy_index.parent());
-    const auto display_role_text = GetIndexPlainText(span_columns, source_index);
+    const auto          row_type          = source_index.data(IsaItemModel::UserRoles::kRowTypeRole).value<IsaItemModel::RowType>();
+    const auto          span_columns      = view_->isFirstColumnSpanned(proxy_index.row(), proxy_index.parent());
+    const auto          display_role_text = GetIndexPlainText(span_columns, source_index);
+    const QFontMetricsF font_metrics(view_->font(), view_);
 
-    AdjustPaintRectangle(paint_rectangle, row_type, source_index, proxy_model, initialized_option.fontMetrics, span_columns);
+    AdjustPaintRectangle(paint_rectangle, row_type, source_index, proxy_model, font_metrics, span_columns);
 
     PaintSearchHighlight(painter, paint_rectangle, display_role_text, source_model->GetFixedFontCharacterWidth(), source_index);
 
@@ -339,7 +340,7 @@ void IsaItemDelegate::paint(QPainter* painter, const QStyleOptionViewItem& optio
         if (source_model->LineNumbersVisible())
         {
             // Paint line #s if they aren't turned off.
-            PaintLineNumber(painter, source_index, option.rect, option);
+            PaintLineNumber(painter, source_index, option.rect);
         }
 
         if (span_columns)
@@ -684,7 +685,7 @@ bool IsaItemDelegate::SetBranchLabelTokenUnderMouse(const QModelIndex& source_in
 void IsaItemDelegate::PaintTokenHighlight(const IsaItemModel::Token& token,
                                           const QRectF&              isa_token_rectangle,
                                           QPainter*                  painter,
-                                          const QFontMetrics&        font_metrics,
+                                          const QFontMetricsF&       font_metrics,
                                           int                        code_block_index,
                                           int                        instruction_index,
                                           int                        token_index) const
@@ -819,11 +820,12 @@ void IsaItemDelegate::PaintText(QPainter* painter, const QModelIndex& source_ind
 
             const std::vector<IsaItemModel::Token> op_code_token        = qvariant_cast<std::vector<IsaItemModel::Token>>(source_index.data(Qt::UserRole));
             const bool                             color_coding_enabled = source_index.data(IsaItemModel::kLineEnabledRole).toBool();
+            const QFontMetricsF                    font_metrics(view_->font(), view_);
 
             PaintTokenHighlight(op_code_token.front(),
                                 paint_rectangle,
                                 painter,
-                                initialized_option.fontMetrics,
+                                font_metrics,
                                 source_index.parent().row(),
                                 source_index.row(),
                                 0);  // Assume 0 index for op code.
@@ -834,19 +836,21 @@ void IsaItemDelegate::PaintText(QPainter* painter, const QModelIndex& source_ind
         {
             // Paint child isa operands as a series of color coded tokens.
 
-            PaintOperands(painter, source_index, paint_rectangle, initialized_option);
+            PaintOperands(painter, source_index, paint_rectangle);
         }
     }
 
     painter->restore();
 }
 
-void IsaItemDelegate::PaintOperands(QPainter* painter, const QModelIndex& source_index, QRectF paint_rectangle, const QStyleOptionViewItem& option) const
+void IsaItemDelegate::PaintOperands(QPainter* painter, const QModelIndex& source_index, QRectF paint_rectangle) const
 {
     std::vector<std::vector<IsaItemModel::Token>> operand_groups_tokens =
         qvariant_cast<std::vector<std::vector<IsaItemModel::Token>>>(source_index.data(Qt::UserRole));
 
     int token_index = 0;  // Track token index to assist painting selection highlight.
+
+    const QFontMetricsF font_metrics(view_->font(), view_);
 
     // Iterate over operands.
     for (size_t i = 0; i < operand_groups_tokens.size(); i++)
@@ -861,7 +865,7 @@ void IsaItemDelegate::PaintOperands(QPainter* painter, const QModelIndex& source
             // Check if we need to paint a selection highlight.
             if (token.is_selectable)
             {
-                PaintTokenHighlight(token, paint_rectangle, painter, option.fontMetrics, source_index.parent().row(), source_index.row(), token_index);
+                PaintTokenHighlight(token, paint_rectangle, painter, font_metrics, source_index.parent().row(), source_index.row(), token_index);
             }
 
             // Paint a color coded operand token.
@@ -879,12 +883,12 @@ void IsaItemDelegate::PaintOperands(QPainter* painter, const QModelIndex& source
 
             // Move x position forward.
             const QString token_text(token.token_text.c_str());
-            paint_rectangle.adjust(option.fontMetrics.horizontalAdvance(token_text), 0, 0, 0);
+            paint_rectangle.adjust(font_metrics.horizontalAdvance(token_text), 0, 0, 0);
 
             // Add a space if it is not the last token in the operand.
             if (j < operand_tokens.size() - 1)
             {
-                paint_rectangle.adjust(option.fontMetrics.horizontalAdvance(IsaItemModel::kOperandTokenSpace), 0, 0, 0);
+                paint_rectangle.adjust(font_metrics.horizontalAdvance(IsaItemModel::kOperandTokenSpace), 0, 0, 0);
             }
 
             token_index++;
@@ -895,38 +899,36 @@ void IsaItemDelegate::PaintOperands(QPainter* painter, const QModelIndex& source
         {
             PaintCommaText(paint_rectangle, painter);
 
-            paint_rectangle.adjust(option.fontMetrics.horizontalAdvance(QString(IsaItemModel::kOperandDelimiter)), 0, 0, 0);
+            paint_rectangle.adjust(font_metrics.horizontalAdvance(QString(IsaItemModel::kOperandDelimiter)), 0, 0, 0);
         }
     }
 }
 
-void IsaItemDelegate::PaintLineNumber(QPainter* painter, const QModelIndex& source_index, QRectF paint_rectangle, const QStyleOptionViewItem& option) const
+void IsaItemDelegate::PaintLineNumber(QPainter* painter, const QModelIndex& source_index, QRectF paint_rectangle) const
 {
-    const auto line_number_text = source_index.data(Qt::DisplayRole).toString() + IsaItemModel::kColumnPadding;
+    const QFontMetricsF font_metrics(view_->font(), view_);
+    const auto          line_number_text = source_index.data(Qt::DisplayRole).toString() + IsaItemModel::kColumnPadding;
 
     // Right align the line number to its column.
     const int line_number_column_width = view_->header()->sectionSize(view_->header()->logicalIndex(0));
-    const int line_number_text_width   = option.fontMetrics.horizontalAdvance(line_number_text);
+    const int line_number_text_width   = font_metrics.horizontalAdvance(line_number_text);
     const int scroll_bar_position      = view_->horizontalScrollBar()->value();
     const int line_number_x_position   = line_number_column_width - line_number_text_width - scroll_bar_position;
 
     paint_rectangle.setX(line_number_x_position);
-    paint_rectangle.setWidth(option.fontMetrics.horizontalAdvance(line_number_text));
+    paint_rectangle.setWidth(font_metrics.horizontalAdvance(line_number_text));
 
     painter->drawText(paint_rectangle, Qt::Alignment(Qt::AlignLeft | Qt::AlignTop), line_number_text);
 }
 
-void IsaItemDelegate::PaintPinnedBlockLabel(QPainter*                   painter,
-                                            const QModelIndex&          source_index,
-                                            QRectF                      paint_rectangle,
-                                            const QStyleOptionViewItem& option,
-                                            const IsaProxyModel*        proxy_model) const
+void IsaItemDelegate::PaintPinnedBlockLabel(QPainter* painter, const QModelIndex& source_index, QRectF paint_rectangle, const IsaProxyModel* proxy_model) const
 {
     // Get the parent isa block index that is off screen from the original instruction index.
-    const auto parent_op_code_source_index = source_index.parent().siblingAtColumn(IsaItemModel::kOpCode);
-    const auto parent_row_type             = parent_op_code_source_index.data(IsaItemModel::UserRoles::kRowTypeRole).value<IsaItemModel::RowType>();
+    const auto          parent_op_code_source_index = source_index.parent().siblingAtColumn(IsaItemModel::kOpCode);
+    const auto          parent_row_type             = parent_op_code_source_index.data(IsaItemModel::UserRoles::kRowTypeRole).value<IsaItemModel::RowType>();
+    const QFontMetricsF font_metrics(view_->font(), view_);
 
-    AdjustPaintRectangle(paint_rectangle, parent_row_type, source_index, proxy_model, option.fontMetrics, true);
+    AdjustPaintRectangle(paint_rectangle, parent_row_type, source_index, proxy_model, font_metrics, true);
 
     PaintText(painter, parent_op_code_source_index, paint_rectangle);
 }
@@ -968,7 +970,7 @@ void IsaItemDelegate::AdjustPaintRectangle(QRectF&                     paint_rec
                                            const IsaItemModel::RowType row_type,
                                            const QModelIndex&          source_index,
                                            const IsaProxyModel*        proxy_model,
-                                           const QFontMetrics          font_metrics,
+                                           const QFontMetricsF         font_metrics,
                                            const bool                  span_columns) const
 {
     if (span_columns)

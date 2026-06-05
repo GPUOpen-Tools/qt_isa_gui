@@ -1,5 +1,5 @@
 //=============================================================================
-// Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2022-2026 Advanced Micro Devices, Inc. All rights reserved.
 /// @author AMD Developer Tools Team
 /// @file
 /// @brief Header for an isa widget.
@@ -195,16 +195,14 @@ private:
         /// @brief Constructor.
         ///
         /// @param [in] parent The parent object.
-        LineValidator(QObject* parent = nullptr)
+        LineValidator(QObject* parent)
             : QValidator(parent)
             , line_count_(0)
         {
         }
 
-        /// Destructor
-        ~LineValidator()
-        {
-        }
+        /// Default destructor
+        ~LineValidator() = default;
 
         /// @brief Sets the line count for validator.
         ///
@@ -253,16 +251,15 @@ private:
         int line_count_;  ///< Line count cache.
     };
 
-    std::unique_ptr<Ui::IsaWidget> ui_;                    ///< The Qt ui form.
-    std::unique_ptr<IsaProxyModel> proxy_model_;           ///< Internal proxy model to assist hiding columns.
-    std::unique_ptr<LineValidator> go_to_line_validator_;  ///< Validate input to the 'Go To Line' line edit.
-
-    QTimer          search_timer_;             ///< Search delay timer.
-    QModelIndexList matches_;                  ///< Cache of list of matches from find query.
-    int             find_index_;               ///< Cache of current find selection index.
-    bool            viewing_options_visible_;  ///< Visibilty state of the Viewing Options widget.
-    bool            show_event_completed_;     ///< Track if this widget has been shown for the first time to help force some widgets to be the same size.
-    bool            search_all_columns_;  ///< Track whether to search all columns in the model attached to this widget or to only search IsaItemModel columns.
+    std::unique_ptr<Ui::IsaWidget> ui_;                              ///< The Qt ui form.
+    LineValidator*                 go_to_line_validator_ = nullptr;  ///< Validate input to the 'Go To Line' line edit.
+    IsaProxyModel*                 proxy_model_          = nullptr;  ///< Internal proxy model to assist hiding columns.
+    QTimer                         search_timer_;                    ///< Search delay timer.
+    QModelIndexList                matches_;                         ///< Cache of list of matches from find query.
+    int                            find_index_;                      ///< Cache of current find selection index.
+    bool                           viewing_options_visible_;         ///< Visibilty state of the Viewing Options widget.
+    bool show_event_completed_;  ///< Track if this widget has been shown for the first time to help force some widgets to be the same size.
+    bool search_all_columns_;    ///< Track whether to search all columns in the model attached to this widget or to only search IsaItemModel columns.
 };
 
 #endif  // QTISAGUI_ISA_WIDGET_H_

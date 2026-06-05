@@ -4,7 +4,7 @@ project(QtIsaGui)
 
 # Define version information
 set(QTISAGUI_MAJOR_VERSION 1)
-set(QTISAGUI_MINOR_VERSION 2)
+set(QTISAGUI_MINOR_VERSION 3)
 
 if (NOT QTISAGUI_PATCH_NUMBER)
     set(QTISAGUI_PATCH_NUMBER 0)
@@ -31,8 +31,8 @@ if (PROJECT_IS_TOP_LEVEL)
 
 endif ()
 
-# Before fetching the isa_decoder, set this variable so we only pull in 
-# the isa_decoder, and skip the command line interface, examples, and tests.
+# Only pull in the isa_decoder from the isa spec manager.
+set (EXCLUDE_ISA_EXPLORER           ON)
 set (EXCLUDE_ISA_CLI_EXAMPLES_TESTS ON)
 
 # Fetch external dependencies; qt_common, isa_decoder and its xml files.

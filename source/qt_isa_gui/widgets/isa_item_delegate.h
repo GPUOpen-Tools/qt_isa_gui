@@ -1,5 +1,5 @@
 //=============================================================================
-// Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2022-2026 Advanced Micro Devices, Inc. All rights reserved.
 /// @author AMD Developer Tools Team
 /// @file
 /// @brief Declaration for an isa item delegate.
@@ -8,6 +8,7 @@
 #ifndef QTISAGUI_ISA_ITEM_DELEGATE_H_
 #define QTISAGUI_ISA_ITEM_DELEGATE_H_
 
+#include <QFontMetricsF>
 #include <QModelIndex>
 #include <QPainter>
 #include <QRectF>
@@ -184,7 +185,7 @@ private:
     void PaintTokenHighlight(const IsaItemModel::Token& token,
                              const QRectF&              isa_token_rectangle,
                              QPainter*                  painter,
-                             const QFontMetrics&        font_metrics,
+                             const QFontMetricsF&       font_metrics,
                              int                        code_block_index,
                              int                        instruction_index,
                              int                        token_index) const;
@@ -201,29 +202,22 @@ private:
     /// @param [in] painter         The QPainter to use to paint.
     /// @param [in] source_index    The source index to paint for.
     /// @param [in] paint_rectangle The rectangle to paint in.
-    /// @param [in] option          The style option.
-    void PaintOperands(QPainter* painter, const QModelIndex& source_index, QRectF paint_rectangle, const QStyleOptionViewItem& option) const;
+    void PaintOperands(QPainter* painter, const QModelIndex& source_index, QRectF paint_rectangle) const;
 
     /// @brief Helper to paint line numbers.
     ///
     /// @param [in] painter         The QPainter to use to paint.
     /// @param [in] source_index    The source index to paint for.
     /// @param [in] paint_rectangle The rectangle to paint in.
-    /// @param [in] option          The style option.
-    void PaintLineNumber(QPainter* painter, const QModelIndex& source_index, QRectF paint_rectangle, const QStyleOptionViewItem& option) const;
+    void PaintLineNumber(QPainter* painter, const QModelIndex& source_index, QRectF paint_rectangle) const;
 
     /// @brief Helper to paint parent isa block labels as if they are pinned to the top of the tree's viewport.
     ///
     /// @param [in] painter         The QPainter to use to paint.
     /// @param [in] source_index    The source index to paint for.
     /// @param [in] paint_rectangle The rectangle to paint in.
-    /// @param [in] option          The style option.
     /// @param [in] proxy_model     The proxy model.
-    void PaintPinnedBlockLabel(QPainter*                   painter,
-                               const QModelIndex&          source_index,
-                               QRectF                      paint_rectangle,
-                               const QStyleOptionViewItem& option,
-                               const IsaProxyModel*        proxy_model) const;
+    void PaintPinnedBlockLabel(QPainter* painter, const QModelIndex& source_index, QRectF paint_rectangle, const IsaProxyModel* proxy_model) const;
 
     /// @brief Helper to paint the standard view row selection effect.
     ///
@@ -255,7 +249,7 @@ private:
                               const IsaItemModel::RowType row_type,
                               const QModelIndex&          source_index,
                               const IsaProxyModel*        proxy_model,
-                              const QFontMetrics          font_metrics,
+                              const QFontMetricsF         font_metrics,
                               const bool                  span_columns) const;
 
     IsaItemModel::Token mouse_over_isa_token_;  ///< Track the token that the mouse is over.

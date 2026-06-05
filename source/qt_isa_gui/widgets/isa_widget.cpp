@@ -1,5 +1,5 @@
 //=============================================================================
-// Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2022-2026 Advanced Micro Devices, Inc. All rights reserved.
 /// @author AMD Developer Tools Team
 /// @file
 /// @brief Isa widget implementation.
@@ -14,8 +14,17 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include "qt_common/utils/common_definitions.h"
+#include "qt_common/utils/qt_util.h"
+
 #include "qt_isa_gui/widgets/isa_branch_label_navigation_widget.h"
 #include "qt_isa_gui/widgets/isa_item_delegate.h"
+
+/// @brief Initialize the qt_isa_gui resource file. Required for static libraries.
+static void InitQtIsaGuiResources()
+{
+    Q_INIT_RESOURCE(qt_isa_gui_resources);
+}
 
 static const int kSearchTimeout = 150;
 
@@ -36,17 +45,31 @@ static bool CompareModelIndices(const QModelIndex& lhs, const QModelIndex& rhs)
 IsaWidget::IsaWidget(QWidget* parent)
     : QWidget(parent)
     , ui_(std::make_unique<Ui::IsaWidget>())
-    , proxy_model_(nullptr)
-    , go_to_line_validator_(nullptr)
     , viewing_options_visible_(false)
     , show_event_completed_(false)
     , search_all_columns_(false)
 {
+    InitQtIsaGuiResources();
+
     ui_->setupUi(this);
 
     connect(ui_->search_, &QLineEdit::textChanged, this, &IsaWidget::SearchTextChanged);
     connect(ui_->search_, &QLineEdit::returnPressed, this, &IsaWidget::SearchEntered);
     connect(&search_timer_, &QTimer::timeout, this, &IsaWidget::Search);
+
+    ui_->search_->setClearButtonEnabled(true);
+
+    ColorThemeType color_theme = QtCommon::QtUtils::ColorTheme::Get().GetColorTheme();
+    if (color_theme == kColorThemeTypeDark)
+    {
+        ui_->search_->addAction(QIcon(":/icons/magnifying_glass_icon_dark_mode.svg"), QLineEdit::LeadingPosition);
+    }
+    else
+    {
+        ui_->search_->addAction(QIcon(":/icons/magnifying_glass_icon.svg"), QLineEdit::LeadingPosition);
+    }
+
+    ui_->search_->setStyleSheet("QLineEdit { border: 1px solid gray; }");
 
     ui_->viewing_options_checkboxes_widget_->setVisible(false);
 
@@ -56,8 +79,8 @@ IsaWidget::IsaWidget(QWidget* parent)
 
     connect(ui_->viewing_options_combo_, &QPushButton::pressed, this, &IsaWidget::ToggleViewingOptions);
 
-    go_to_line_validator_ = std::make_unique<LineValidator>(ui_->go_to_line_);
-    ui_->go_to_line_->setValidator(go_to_line_validator_.get());
+    go_to_line_validator_ = new LineValidator(ui_->go_to_line_);
+    ui_->go_to_line_->setValidator(go_to_line_validator_);
 
     // Make the 'go to line' line edit's style sheet match the 'search' line edit's style sheet.
     ui_->go_to_line_->setStyleSheet("QLineEdit {border: 1px solid gray;}");
@@ -65,18 +88,8 @@ IsaWidget::IsaWidget(QWidget* parent)
     // Set the 'go to line' line edit's width to match its text.
     QFontMetrics go_to_line_font_metrics(ui_->go_to_line_->font());
     int          go_to_line_width = go_to_line_font_metrics.horizontalAdvance(ui_->go_to_line_->placeholderText());
+
     ui_->go_to_line_->setFixedWidth(go_to_line_width + 10);
-
-    // Try to make the controls widgets at the top look better by aligning them all together.
-    for (int i = 0; i < ui_->controls_layout_->count(); i++)
-    {
-        auto* item = ui_->controls_layout_->itemAt(i);
-
-        if (item->widget() != nullptr)
-        {
-            ui_->controls_layout_->setAlignment(item->widget(), Qt::AlignLeft | Qt::AlignCenter);
-        }
-    }
 
     connect(ui_->go_to_line_, &QLineEdit::returnPressed, this, &IsaWidget::GoToLineEntered);
 
@@ -122,15 +135,15 @@ void IsaWidget::SetModelAndView(QWidget* navigation_widget_parent, IsaItemModel*
     // Attach a client's proxy or make the default one instead.
     if (proxy_model != nullptr)
     {
-        proxy_model_.reset(proxy_model);
+        proxy_model_ = proxy_model;
     }
     else
     {
-        proxy_model_.reset(new IsaProxyModel);
+        proxy_model_ = new IsaProxyModel(ui_->isa_tree_view_);
     }
 
     proxy_model_->setSourceModel(isa_item_model);
-    ui_->isa_tree_view_->setModel(proxy_model_.get());
+    ui_->isa_tree_view_->setModel(proxy_model_);
 
     for (uint32_t column = IsaItemModel::kPcAddress; column < proxy_model_->GetNumberOfViewingOptions(); column++)
     {
@@ -356,7 +369,9 @@ void IsaWidget::SetFocusOnSearchWidget()
 void IsaWidget::SetGoToLineValidatorLineCount(int line_count)
 {
     ui_->go_to_line_->clear();
-    go_to_line_validator_->SetLineCount(line_count);
+    const int max_line = line_count > 0 ? line_count - 1 : 0;
+    go_to_line_validator_->SetLineCount(max_line);
+    ui_->go_to_line_->setPlaceholderText(QString("Go to line (0 - ") + QString::number(max_line) + QString("): "));
 }
 
 void IsaWidget::Search()
@@ -690,7 +705,7 @@ void IsaWidget::RefreshSearchMatchLineNumbers(const QModelIndex& index)
 
 void IsaWidget::BranchLabelNavigationForward()
 {
-    if (ui_->branch_label_navigation_->ForwardButton().isEnabled())
+    if (ui_->branch_label_navigation_->CanNavigateForward())
     {
         ui_->branch_label_navigation_->ForwardPressed();
     }
@@ -698,7 +713,7 @@ void IsaWidget::BranchLabelNavigationForward()
 
 void IsaWidget::BranchLabelNavigationBack()
 {
-    if (ui_->branch_label_navigation_->BackButton().isEnabled())
+    if (ui_->branch_label_navigation_->CanNavigateBack())
     {
         ui_->branch_label_navigation_->BackPressed();
     }

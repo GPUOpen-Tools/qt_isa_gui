@@ -1,5 +1,5 @@
 //=============================================================================
-/// Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2022-2026 Advanced Micro Devices, Inc. All rights reserved.
 /// @author AMD Developer Tools Team
 /// @file
 /// @brief  Implementation of an isa branch label navigation widget.
@@ -7,42 +7,65 @@
 
 #include "isa_branch_label_navigation_widget.h"
 
+#include <QPushButton>
+
 #include "qt_common/utils/common_definitions.h"
 #include "qt_common/utils/qt_util.h"
 
 #include "isa_item_model.h"
 
-const QString kIsaBranchLabelBackNormalResource_      = ":/Resources/assets/browse_back_disabled.svg";
-const QString kIsaBranchLabelBackDisabledResource_    = ":/Resources/assets/browse_back_normal.svg";
-const QString kIsaBranchLabelForwardNormalResource_   = ":/Resources/assets/browse_fwd_disabled.svg";
-const QString kIsaBranchLabelForwardDisabledResource_ = ":/Resources/assets/browse_fwd_normal.svg";
+/// @brief Initialize the qt_isa_gui resource file. Required for static libraries.
+static void InitQtIsaGuiResources()
+{
+    Q_INIT_RESOURCE(qt_isa_gui_resources);
+}
+
+namespace
+{
+    const QString button_style =
+        "QPushButton         { border: 1px solid gray; background: palette(button); }"
+        "QPushButton:hover   { background-color: rgba(0,0,0,0.08);                  }"
+        "QPushButton:pressed { background-color: rgba(0,0,0,0.20);                  }";
+
+}
 
 IsaBranchLabelNavigationWidget::IsaBranchLabelNavigationWidget(QWidget* parent)
-    : NavigationBar(parent)
+    : QWidget(parent)
     , branch_label_history_combo_(nullptr)
 {
+    InitQtIsaGuiResources();
+
     branch_label_history_combo_ = new ArrowIconComboBox(this);
+    previous_button_            = new QPushButton(this);
+    next_button_                = new QPushButton(this);
 
-    layout_.insertWidget(1, branch_label_history_combo_);
+    previous_button_->setStyleSheet(button_style);
+    previous_button_->setIconSize(QSize(17, 17));
+    previous_button_->setFixedSize(19, 19);
+    previous_button_->setCursor(Qt::PointingHandCursor);
 
-    connect(&browse_back_button_, &QAbstractButton::pressed, this, &IsaBranchLabelNavigationWidget::BackPressed);
+    next_button_->setStyleSheet(button_style);
+    next_button_->setIconSize(QSize(17, 17));
+    next_button_->setFixedSize(19, 19);
+    next_button_->setCursor(Qt::PointingHandCursor);
 
-    connect(&browse_forward_button_, &QAbstractButton::pressed, this, &IsaBranchLabelNavigationWidget::ForwardPressed);
+    layout_ = new QHBoxLayout(this);
 
+    layout_->addWidget(previous_button_);
+    layout_->addWidget(branch_label_history_combo_);
+    layout_->addWidget(next_button_);
+
+    connect(previous_button_, &QPushButton::pressed, this, &IsaBranchLabelNavigationWidget::BackPressed);
+    connect(next_button_, &QPushButton::pressed, this, &IsaBranchLabelNavigationWidget::ForwardPressed);
     connect(branch_label_history_combo_, &ArrowIconComboBox::SelectedItem, this, &IsaBranchLabelNavigationWidget::HistoryEntrySelected);
-
     connect(&QtCommon::QtUtils::ColorTheme::Get(), &QtCommon::QtUtils::ColorTheme::ColorThemeUpdated, this, &IsaBranchLabelNavigationWidget::SetButtonIcons);
 
     ClearHistory();
 
-    // Override the style set in the base class.
     SetButtonIcons();
 
-    browse_back_button_.setStyleSheet("");
-    browse_forward_button_.setStyleSheet("");
-
-    layout_.setAlignment(Qt::AlignTop);
-    layout_.setContentsMargins(0, 0, 0, 0);
+    layout_->setAlignment(Qt::AlignTop);
+    layout_->setContentsMargins(0, 0, 0, 0);
 }
 
 IsaBranchLabelNavigationWidget::~IsaBranchLabelNavigationWidget()
@@ -60,8 +83,8 @@ void IsaBranchLabelNavigationWidget::ClearHistory()
 
     branch_label_history_combo_->ClearItems();
 
-    EnableBackButton(false);
-    EnableForwardButton(false);
+    previous_button_->setEnabled(false);
+    next_button_->setEnabled(false);
 }
 
 void IsaBranchLabelNavigationWidget::AddBranchOrLabelToHistory(QModelIndex branch_label_source_index)
@@ -100,11 +123,26 @@ void IsaBranchLabelNavigationWidget::AddBranchOrLabelToHistory(QModelIndex branc
 
     branch_label_history_combo_->ClearSelectedRow();
 
-    EnableBackButton(true);
+    previous_button_->setEnabled(true);
+}
+
+bool IsaBranchLabelNavigationWidget::CanNavigateBack() const
+{
+    return previous_button_->isEnabled();
+}
+
+bool IsaBranchLabelNavigationWidget::CanNavigateForward() const
+{
+    return next_button_->isEnabled();
 }
 
 void IsaBranchLabelNavigationWidget::BackPressed()
 {
+    if (history_index_ <= 0)
+    {
+        return;
+    }
+
     history_index_--;
 
     branch_label_history_combo_->SetSelectedRow(history_index_);
@@ -113,19 +151,17 @@ void IsaBranchLabelNavigationWidget::BackPressed()
 
     emit Navigate(previous_source_index);
 
-    if (history_index_ < branch_label_history_combo_->RowCount() - 1)
-    {
-        EnableForwardButton(true);
-    }
-
-    if (history_index_ == 0)
-    {
-        EnableBackButton(false);
-    }
+    next_button_->setEnabled(true);
+    previous_button_->setEnabled(history_index_ > 0);
 }
 
 void IsaBranchLabelNavigationWidget::ForwardPressed()
 {
+    if (history_index_ >= branch_label_history_combo_->RowCount() - 1)
+    {
+        return;
+    }
+
     history_index_++;
 
     branch_label_history_combo_->SetSelectedRow(history_index_);
@@ -134,12 +170,8 @@ void IsaBranchLabelNavigationWidget::ForwardPressed()
 
     emit Navigate(next_source_index);
 
-    EnableBackButton(true);
-
-    if (history_index_ == branch_label_history_combo_->RowCount() - 1)
-    {
-        EnableForwardButton(false);
-    }
+    previous_button_->setEnabled(true);
+    next_button_->setEnabled(history_index_ < branch_label_history_combo_->RowCount() - 1);
 }
 
 void IsaBranchLabelNavigationWidget::HistoryEntrySelected(QListWidgetItem* item)
@@ -152,46 +184,31 @@ void IsaBranchLabelNavigationWidget::HistoryEntrySelected(QListWidgetItem* item)
 
     emit Navigate(selected_entry_source_index);
 
-    const bool enable_back_button = (history_index_ == 0) ? false : true;
-
-    EnableBackButton(enable_back_button);
-
-    const bool enable_forward_button = (history_index_ == branch_label_history_combo_->RowCount() - 1) ? false : true;
-
-    EnableForwardButton(enable_forward_button);
+    previous_button_->setEnabled(history_index_ > 0);
+    next_button_->setEnabled(history_index_ < branch_label_history_combo_->RowCount() - 1);
 }
 
 void IsaBranchLabelNavigationWidget::TrimHistory()
 {
     const int row_count = branch_label_history_combo_->RowCount();
-    for (int i = row_count; i > history_index_; i--)
+    for (int i = row_count - 1; i > history_index_; i--)
     {
         branch_label_history_combo_->RemoveItem(i);
-
-        EnableForwardButton(false);
     }
+
+    next_button_->setEnabled(false);
 }
 
 void IsaBranchLabelNavigationWidget::SetButtonIcons()
 {
-    if (QtCommon::QtUtils::ColorTheme::Get().GetColorTheme() == kColorThemeTypeLight)
+    if (QtCommon::QtUtils::ColorTheme::Get().GetColorTheme() == kColorThemeTypeDark)
     {
-        browse_back_button_.SetNormalIcon(QIcon(kIsaBranchLabelBackNormalResource_));
-        browse_back_button_.SetHoverIcon(QIcon(kIsaBranchLabelBackNormalResource_));
-        browse_back_button_.SetDisabledIcon(QIcon(kIsaBranchLabelBackDisabledResource_));
-
-        browse_forward_button_.SetNormalIcon(QIcon(kIsaBranchLabelForwardNormalResource_));
-        browse_forward_button_.SetHoverIcon(QIcon(kIsaBranchLabelForwardNormalResource_));
-        browse_forward_button_.SetDisabledIcon(QIcon(kIsaBranchLabelForwardDisabledResource_));
+        previous_button_->setIcon(QIcon(":/icons/find_previous_icon_dark_mode.svg"));
+        next_button_->setIcon(QIcon(":/icons/find_next_icon_dark_mode.svg"));
     }
     else
     {
-        browse_back_button_.SetNormalIcon(QIcon(kIsaBranchLabelBackDisabledResource_));
-        browse_back_button_.SetHoverIcon(QIcon(kIsaBranchLabelBackDisabledResource_));
-        browse_back_button_.SetDisabledIcon(QIcon(kIsaBranchLabelBackNormalResource_));
-
-        browse_forward_button_.SetNormalIcon(QIcon(kIsaBranchLabelForwardDisabledResource_));
-        browse_forward_button_.SetHoverIcon(QIcon(kIsaBranchLabelForwardDisabledResource_));
-        browse_forward_button_.SetDisabledIcon(QIcon(kIsaBranchLabelForwardNormalResource_));
+        previous_button_->setIcon(QIcon(":/icons/find_previous_icon.svg"));
+        next_button_->setIcon(QIcon(":/icons/find_next_icon.svg"));
     }
 }

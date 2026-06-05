@@ -1,5 +1,5 @@
 //=============================================================================
-// Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2022-2026 Advanced Micro Devices, Inc. All rights reserved.
 /// @author AMD Developer Tools Team
 /// @file
 /// @brief Header for an isa tree view.
@@ -35,8 +35,8 @@ public:
     /// @param [in] parent The parent widget.
     explicit IsaTreeView(QWidget* parent = nullptr);
 
-    /// @brief Destructor.
-    virtual ~IsaTreeView();
+    /// @brief Default destructor.
+    virtual ~IsaTreeView() = default;
 
     /// @brief Set a new delegate on to this tree and manage it.
     ///
@@ -192,11 +192,11 @@ private:
     /// @param [in] value The new value of the scroll bar.
     void ScrollBarScrolled(int value);
 
-    IsaVerticalScrollBar*            isa_scroll_bar_;           ///< Scroll bar to paint red and purple rectangles for hot spots and text search matches.
-    std::unique_ptr<IsaItemDelegate> isa_item_delegate_;        ///< Delegate attached to this tree.
-    bool                             copy_line_numbers_;        ///< Whether the line number text is to be included when copying isa text. True by default.
-    std::pair<int, int>              last_pinned_row_;          ///< The code block and instruction rows of the last index that was pinned.
-    bool                             paint_column_separators_;  ///< Whether or not to paint the the column separators.
+    IsaVerticalScrollBar* isa_scroll_bar_;               ///< Scroll bar to paint red and purple rectangles for hot spots and text search matches.
+    IsaItemDelegate*      isa_item_delegate_ = nullptr;  ///< Delegate attached to this tree.
+    bool                  copy_line_numbers_;            ///< Whether the line number text is to be included when copying isa text. True by default.
+    std::pair<int, int>   last_pinned_row_;              ///< The code block and instruction rows of the last index that was pinned.
+    bool                  paint_column_separators_;      ///< Whether or not to paint the the column separators.
 };
 
 #endif  // QTISAGUI_ISA_TREE_VIEW_H_

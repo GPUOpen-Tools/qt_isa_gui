@@ -1,5 +1,5 @@
 //=============================================================================
-// Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2022-2026 Advanced Micro Devices, Inc. All rights reserved.
 /// @author AMD Developer Tools Team
 /// @file
 /// @brief Isa tree view implementation.
@@ -74,7 +74,6 @@ static bool CompareModelIndices(const CompareIndexInfo& lhs, const CompareIndexI
 IsaTreeView::IsaTreeView(QWidget* parent)
     : QTreeView(parent)
     , isa_scroll_bar_(nullptr)
-    , isa_item_delegate_(nullptr)
     , copy_line_numbers_(true)
     , last_pinned_row_(std::pair<int, int>(-1, -1))
     , paint_column_separators_(true)
@@ -113,6 +112,7 @@ IsaTreeView::IsaTreeView(QWidget* parent)
     // Pick a normal fixed width font for the tree.
     QFont consolas_font("Consolas");
     consolas_font.setStyleHint(QFont::Monospace);
+    consolas_font.setPointSize(9);
     setFont(consolas_font);
 
     // Make the header font bold.
@@ -120,8 +120,8 @@ IsaTreeView::IsaTreeView(QWidget* parent)
     header_font.setBold(true);
     header()->setFont(header_font);
 
-    isa_item_delegate_ = std::make_unique<IsaItemDelegate>(this);
-    setItemDelegate(isa_item_delegate_.get());
+    isa_item_delegate_ = new IsaItemDelegate(this, this);
+    setItemDelegate(isa_item_delegate_);
 
     // Allow contiguous selection per rows.
     setSelectionMode(QAbstractItemView::SelectionMode::ContiguousSelection);
@@ -142,15 +142,13 @@ IsaTreeView::IsaTreeView(QWidget* parent)
     connect(this, &QTreeView::collapsed, this, &IsaTreeView::IndexExpandedOrCollapsed);
 }
 
-IsaTreeView::~IsaTreeView()
-{
-}
-
 void IsaTreeView::ReplaceDelegate(IsaItemDelegate* delegate)
 {
     setItemDelegate(delegate);
 
-    isa_item_delegate_.reset(delegate);
+    isa_item_delegate_->deleteLater();
+
+    isa_item_delegate_ = delegate;
 }
 
 void IsaTreeView::RegisterScrollAreas(std::vector<QScrollArea*> container_scroll_areas)

@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>773</width>
-    <height>336</height>
+    <width>529</width>
+    <height>268</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -32,7 +32,7 @@
    <item>
     <layout class="QHBoxLayout" name="controls_layout_" stretch="0,1,0,0,0,0">
      <property name="spacing">
-      <number>9</number>
+      <number>6</number>
      </property>
      <property name="leftMargin">
       <number>0</number>
@@ -70,7 +70,7 @@
         <property name="bottomMargin">
          <number>0</number>
         </property>
-        <item alignment="Qt::AlignmentFlag::AlignVCenter">
+        <item>
          <widget class="ArrowIconComboBox" name="viewing_options_combo_">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -82,8 +82,8 @@
            <string>Viewing Options</string>
           </property>
           <property name="icon">
-           <iconset>
-            <normaloff>:/Resources/assets/PullDownOff_Gray.svg</normaloff>:/Resources/assets/PullDownOff_Gray.svg</iconset>
+           <iconset resource="../qt_isa_gui_resources.qrc">
+            <normaloff>:/icons/PullDownOff_Gray.svg</normaloff>:/icons/PullDownOff_Gray.svg</iconset>
           </property>
           <property name="flat">
            <bool>true</bool>
@@ -124,7 +124,7 @@
        </property>
       </spacer>
      </item>
-     <item alignment="Qt::AlignmentFlag::AlignVCenter">
+     <item alignment="Qt::AlignmentFlag::AlignTop">
       <widget class="QLineEdit" name="go_to_line_">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -133,12 +133,12 @@
         </sizepolicy>
        </property>
        <property name="placeholderText">
-        <string>Go to line...</string>
+        <string>Go to line (0 - XXXX):</string>
        </property>
       </widget>
      </item>
-     <item alignment="Qt::AlignmentFlag::AlignVCenter">
-      <widget class="TextSearchWidget" name="search_">
+     <item alignment="Qt::AlignmentFlag::AlignTop">
+      <widget class="QLineEdit" name="search_">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
          <horstretch>0</horstretch>
@@ -147,13 +147,22 @@
        </property>
        <property name="minimumSize">
         <size>
-         <width>0</width>
+         <width>200</width>
          <height>0</height>
         </size>
        </property>
+       <property name="maximumSize">
+        <size>
+         <width>300</width>
+         <height>16777215</height>
+        </size>
+       </property>
+       <property name="placeholderText">
+        <string>Find...</string>
+       </property>
       </widget>
      </item>
-     <item alignment="Qt::AlignmentFlag::AlignVCenter">
+     <item alignment="Qt::AlignmentFlag::AlignTop">
       <widget class="QLabel" name="search_results_">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -166,7 +175,7 @@
        </property>
       </widget>
      </item>
-     <item alignment="Qt::AlignmentFlag::AlignVCenter">
+     <item alignment="Qt::AlignmentFlag::AlignTop">
       <widget class="IsaBranchLabelNavigationWidget" name="branch_label_navigation_" native="true">
        <property name="sizePolicy">
         <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
@@ -176,8 +185,8 @@
        </property>
        <property name="minimumSize">
         <size>
-         <width>50</width>
-         <height>10</height>
+         <width>0</width>
+         <height>0</height>
         </size>
        </property>
        <property name="styleSheet">
@@ -203,11 +212,6 @@
    <header>qt_common/custom_widgets/arrow_icon_combo_box.h</header>
   </customwidget>
   <customwidget>
-   <class>TextSearchWidget</class>
-   <extends>QLineEdit</extends>
-   <header>qt_common/custom_widgets/text_search_widget.h</header>
-  </customwidget>
-  <customwidget>
    <class>IsaBranchLabelNavigationWidget</class>
    <extends>QWidget</extends>
    <header>qt_isa_gui/widgets/isa_branch_label_navigation_widget.h</header>
@@ -220,7 +224,7 @@
   </customwidget>
  </customwidgets>
  <resources>
-  <include location="../../frontend/resources.qrc"/>
+  <include location="../qt_isa_gui_resources.qrc"/>
  </resources>
  <connections/>
 </ui>

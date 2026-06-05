@@ -1,0 +1,12 @@
+<RCC>
+  <qresource prefix="">
+    <file>icons/find_previous_icon.svg</file>
+    <file>icons/find_previous_icon_dark_mode.svg</file>
+    <file>icons/find_next_icon.svg</file>
+    <file>icons/find_next_icon_dark_mode.svg</file>
+    <file>icons/magnifying_glass_icon.svg</file>
+    <file>icons/magnifying_glass_icon_dark_mode.svg</file>
+    <file>icons/close_icon.svg</file>
+    <file>icons/PullDownOff_Gray.svg</file>
+  </qresource>
+</RCC>

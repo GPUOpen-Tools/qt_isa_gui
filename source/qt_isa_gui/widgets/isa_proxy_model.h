@@ -1,5 +1,5 @@
 //=============================================================================
-// Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2022-2026 Advanced Micro Devices, Inc. All rights reserved.
 /// @author AMD Developer Tools Team
 /// @file
 /// @brief Header for an isa proxy model.
@@ -30,7 +30,7 @@ public:
     /// @param [in] columns_visiblity Vector to specify column visibilty. kPcAddress and kBinaryRepresentation are hidden by default.
     explicit IsaProxyModel(QObject* parent = nullptr, std::vector<bool> columns_visiblity = {true, false, true, true, false});
 
-    /// @brief Destructor.
+    /// @brief Default destructor.
     virtual ~IsaProxyModel() = default;
 
     /// @brief Change the visibility of a column and invalidate this model.

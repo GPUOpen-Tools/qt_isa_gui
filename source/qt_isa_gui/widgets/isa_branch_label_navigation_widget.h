@@ -1,5 +1,5 @@
 //=============================================================================
-/// Copyright (c) 2022-2025 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2022-2026 Advanced Micro Devices, Inc. All rights reserved.
 /// @author AMD Developer Tools Team
 /// @file
 /// @brief Header for an isa branch label navigation widget.
@@ -8,13 +8,15 @@
 #ifndef QTISAGUI_ISA_BRANCH_LABEL_NAVIGATION_WIDGET_H_
 #define QTISAGUI_ISA_BRANCH_LABEL_NAVIGATION_WIDGET_H_
 
+#include <QHBoxLayout>
 #include <QModelIndex>
+#include <QPushButton>
+#include <QWidget>
 
 #include "qt_common/custom_widgets/arrow_icon_combo_box.h"
-#include "qt_common/custom_widgets/navigation_bar.h"
 
 /// @brief IsaBranchLabelNavigationWidget extends the NavigationBar by adding a history combo box in between the arrow buttons.
-class IsaBranchLabelNavigationWidget final : public NavigationBar
+class IsaBranchLabelNavigationWidget final : public QWidget
 {
     Q_OBJECT
 
@@ -34,6 +36,12 @@ public:
 
     /// @brief Clear all entries from history and reset the navigation buttons' status.
     void ClearHistory();
+
+    /// @brief Returns true if the back navigation button is currently enabled.
+    bool CanNavigateBack() const;
+
+    /// @brief Returns true if the forward navigation button is currently enabled.
+    bool CanNavigateForward() const;
 
 public slots:
 
@@ -67,11 +75,14 @@ private:
     /// @brief Trim any entries between the current index and the end of the history.
     void TrimHistory();
 
-    /// @brief Sets the icons of the button widget.
+    /// @brief Update the icons of the navigation buttons to match the current color theme.
     void SetButtonIcons();
 
-    ArrowIconComboBox* branch_label_history_combo_;  ///< The combo box that holds the navigation history.
-    int                history_index_;               ///< The current location into the navigation history.
+    QHBoxLayout*       layout_                     = nullptr;  ///< This widget's layout, which holds the navigation buttons and history combo box.
+    QPushButton*       previous_button_            = nullptr;  ///< The button to navigate to the previous history entry.
+    QPushButton*       next_button_                = nullptr;  ///< The button to navigate to the next history entry.
+    ArrowIconComboBox* branch_label_history_combo_ = nullptr;  ///< The combo box that holds the navigation history.
+    int                history_index_              = 0;        ///< The current location into the navigation history.
 };
 
 #endif  // QTISAGUI_ISA_BRANCH_LABEL_NAVIGATION_WIDGET_H_

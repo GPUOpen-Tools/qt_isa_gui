@@ -3,6 +3,7 @@ cmake_minimum_required (VERSION 3.24)
 # Build Qt .ui MOC files for the library.
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
+set(CMAKE_AUTORCC ON)
 
 # Add header files.
 file (GLOB CPP_INC
@@ -14,11 +15,15 @@ file (GLOB CPP_INC
     "isa_tree_view.h"
     "isa_widget.h"
     "isa_vertical_scroll_bar.h"
+    "shader_source_code_viewer.h"
+    "shader_source_code_viewer_searcher.h"
+    "find_text_widget.h"
 )
 
 # Add .ui files.
 file (GLOB UI_SRC
     "isa_widget.ui"
+    "find_text_widget.ui"
 )
 
 # Add source files.
@@ -31,9 +36,12 @@ file (GLOB CPP_SRC
     "isa_tree_view.cpp"
     "isa_widget.cpp"
     "isa_vertical_scroll_bar.cpp"
+    "shader_source_code_viewer.cpp"
+    "shader_source_code_viewer_searcher.cpp"
+    "find_text_widget.cpp"
 )
 
-add_library(qt_isa_widgets STATIC ${CPP_SRC} ${CPP_INC} ${UI_SRC})
+add_library(qt_isa_widgets STATIC ${CPP_SRC} ${CPP_INC} ${UI_SRC} ../qt_isa_gui_resources.qrc)
 
 if (PROJECT_IS_TOP_LEVEL)
     set_property(GLOBAL PROPERTY USE_FOLDERS ON)
