@@ -16,17 +16,58 @@ IsaColorCodingDictionaryInstance& IsaColorCodingDictionaryInstance::GetInstance(
     return instance;
 }
 
-bool IsaColorCodingDictionaryInstance::ShouldHighlight(const std::string& str, QColor& color) const
+bool IsaColorCodingDictionaryInstance::ShouldHighlight(const std::string&                         str,
+                                                       const amdisa::FunctionalGroupSubgroupInfo& functional_group_info,
+                                                       QColor&                                    color) const
 {
     color = QtCommon::QtUtils::ColorTheme::Get().GetCurrentThemeColors().graphics_scene_text_color;
 
-    QColor tree_colors;
+    QColor        tree_color;
+    IsaColorGroup color_group = kIsaColorGroupUnknown;
 
-    bool should_highlight = prefix_tree_[QtCommon::QtUtils::ColorTheme::Get().GetColorTheme()].PrefixFoundInTree(str, tree_colors);
-
-    if (tree_colors != nullptr)
+    // Sanity check before indexing into function group to color group array.
+    if (static_cast<int>(functional_group_info.isa_functional_group) >= 0 &&
+        static_cast<int>(functional_group_info.isa_functional_group) < kFunctionalGroupCount)
     {
-        color = tree_colors;
+        color_group = kFunctionalGroupToColorGroup[static_cast<int>(functional_group_info.isa_functional_group)];
+    }
+
+    bool should_highlight = false;
+
+    // Functional group info is empty for operand text.
+    if (color_group == kIsaColorGroupUnknown)
+    {
+        // Check the prefix tree to determine if the operand should be highlighted and what color it should be highlighted with based on its prefix.
+        should_highlight = prefix_tree_.PrefixFoundInTree(str, tree_color);
+    }
+    else if (color_group != kIsaColorGroupOther)
+    {
+        amdisa::FunctionalSubgroups subgroup = amdisa::FunctionalSubgroups::kFunctionalSubgroupUnknown;
+
+        // Check if any of the functional subgroups for this instruction have a defined color, if so, use that subgroup for coloring instead of the "unknown" subgroup. This allows instructions with known subgroups to be colored differently than those with unknown subgroups within the same functional group.
+        for (size_t i = 0; i < functional_group_info.isa_functional_subgroups.size(); i++)
+        {
+            std::pair<IsaColorGroup, amdisa::FunctionalSubgroups> key{color_group, functional_group_info.isa_functional_subgroups.at(i)};
+
+            if (kFunctionalSubgroupColorMap.find(key) != kFunctionalSubgroupColorMap.end())
+            {
+                subgroup = functional_group_info.isa_functional_subgroups.at(i);
+                break;
+            }
+        }
+
+        std::pair<IsaColorGroup, amdisa::FunctionalSubgroups> key{color_group, subgroup};
+
+        if (kFunctionalSubgroupColorMap.find(key) != kFunctionalSubgroupColorMap.end())
+        {
+            should_highlight = true;
+            tree_color       = kFunctionalSubgroupColorMap.at(key);
+        }
+    }
+
+    if (should_highlight)
+    {
+        color = tree_color;
     }
 
     return should_highlight;
@@ -34,71 +75,35 @@ bool IsaColorCodingDictionaryInstance::ShouldHighlight(const std::string& str, Q
 
 IsaColorCodingDictionaryInstance::IsaColorCodingDictionaryInstance()
 {
-    prefix_tree_[kColorThemeTypeLight].Insert("s_buffer", kIsaLightThemeColorLightOrange);
-    prefix_tree_[kColorThemeTypeLight].Insert("s_load", kIsaLightThemeColorLightOrange);
-    prefix_tree_[kColorThemeTypeLight].Insert("s_waitcnt", kIsaLightThemeColorPink);
-    prefix_tree_[kColorThemeTypeLight].Insert("expcnt", kIsaLightThemeColorPink);
-    prefix_tree_[kColorThemeTypeLight].Insert("vmcnt", kIsaLightThemeColorPink);
-    prefix_tree_[kColorThemeTypeLight].Insert("lgkmcnt", kIsaLightThemeColorPink);
-    prefix_tree_[kColorThemeTypeLight].Insert("s_swap", kIsaLightThemeColorRed);
-    prefix_tree_[kColorThemeTypeLight].Insert("s_branch", kIsaLightThemeColorRed);
-    prefix_tree_[kColorThemeTypeLight].Insert("s_cbranch", kIsaLightThemeColorRed);
-    prefix_tree_[kColorThemeTypeLight].Insert("s_setpc", kIsaLightThemeColorRed);
-    prefix_tree_[kColorThemeTypeLight].Insert("ds_", kIsaLightThemeColorBlue);
-    prefix_tree_[kColorThemeTypeLight].Insert("buffer_", kIsaLightThemeColorPurple);
-    prefix_tree_[kColorThemeTypeLight].Insert("tbuffer_", kIsaLightThemeColorPurple);
-    prefix_tree_[kColorThemeTypeLight].Insert("image_", kIsaLightThemeColorPurple);
-    prefix_tree_[kColorThemeTypeLight].Insert("global_load", kIsaLightThemeColorPurple);
-    prefix_tree_[kColorThemeTypeLight].Insert("idxen", kIsaLightThemeColorPurple);
-    prefix_tree_[kColorThemeTypeLight].Insert("s_", kIsaLightThemeColorBlue);
-    prefix_tree_[kColorThemeTypeLight].Insert("s[", kIsaLightThemeColorBlue);  // Scalar register.
-    prefix_tree_[kColorThemeTypeLight].Insert("[s", kIsaLightThemeColorBlue);  // Scalar register range.
-    prefix_tree_[kColorThemeTypeLight].Insert("|s", kIsaLightThemeColorBlue);  // Scalar register absolute value.
-    prefix_tree_[kColorThemeTypeLight].Insert("-s", kIsaLightThemeColorBlue);  // Scalar register negative value.
-    prefix_tree_[kColorThemeTypeLight].Insert("v_", kIsaLightThemeColorLightGreen);
-    prefix_tree_[kColorThemeTypeLight].Insert("v[", kIsaLightThemeColorLightGreen);  // Vector register.
-    prefix_tree_[kColorThemeTypeLight].Insert("[v", kIsaLightThemeColorLightGreen);  // Vector register range.
-    prefix_tree_[kColorThemeTypeLight].Insert("|v", kIsaLightThemeColorLightGreen);  // Vector register absolute value.
-    prefix_tree_[kColorThemeTypeLight].Insert("-v", kIsaLightThemeColorLightGreen);  // Vector register negative value.
-    prefix_tree_[kColorThemeTypeLight].Insert("//", kIsaLightThemeColorLightBlue);   // Comments.
+    prefix_tree_.Insert("idxen", kIsaColorPurple);
+    prefix_tree_.Insert("s_", kIsaColorGreyBlue);
+    prefix_tree_.Insert("s[", kIsaColorGreyBlue);  // Scalar register.
+    prefix_tree_.Insert("[s", kIsaColorGreyBlue);  // Scalar register range.
+    prefix_tree_.Insert("|s", kIsaColorGreyBlue);  // Scalar register absolute value.
+    prefix_tree_.Insert("-s", kIsaColorGreyBlue);  // Scalar register negative value.
+    prefix_tree_.Insert("v_", kIsaColorLightGreen);
+    prefix_tree_.Insert("v[", kIsaColorLightGreen);  // Vector register.
+    prefix_tree_.Insert("[v", kIsaColorLightGreen);  // Vector register range.
+    prefix_tree_.Insert("|v", kIsaColorLightGreen);  // Vector register absolute value.
+    prefix_tree_.Insert("-v", kIsaColorLightGreen);  // Vector register negative value.
+    prefix_tree_.Insert("//", kIsaColorLightBlue);   // Comments.
+    prefix_tree_.Insert("-", kIsaColorGrey);         // Negative constants (negative registers use longer prefixes -s, -v).
+    prefix_tree_.Insert("null", kIsaColorGrey);      // Constants.
+    prefix_tree_.Insert("src_", kIsaColorGrey);      // Special constant operands (SRC_SCC, SRC_SHARED_BASE, etc).
+    prefix_tree_.Insert("SRC_", kIsaColorGrey);
+    prefix_tree_.Insert("vcc", kIsaColorGrey);  // Vector condition code.
+    prefix_tree_.Insert("VCC", kIsaColorGrey);
+    prefix_tree_.Insert("exec", kIsaColorGrey);  // Execute mask.
+    prefix_tree_.Insert("EXEC", kIsaColorGrey);
+    prefix_tree_.Insert("m0", kIsaColorGrey);  // M0 special register.
+    prefix_tree_.Insert("M0", kIsaColorGrey);
+    prefix_tree_.Insert("ttmp", kIsaColorGrey);  // Trap handler temps.
+    prefix_tree_.Insert("TTMP", kIsaColorGrey);
 
     for (size_t i = 0; i <= 9; ++i)
     {
-        prefix_tree_[kColorThemeTypeLight].Insert("s" + std::to_string(i), kIsaLightThemeColorBlue);
-        prefix_tree_[kColorThemeTypeLight].Insert("v" + std::to_string(i), kIsaLightThemeColorLightGreen);
-    }
-
-    prefix_tree_[kColorThemeTypeDark].Insert("s_buffer", kIsaDarkThemeColorLightOrange);
-    prefix_tree_[kColorThemeTypeDark].Insert("s_load", kIsaDarkThemeColorLightOrange);
-    prefix_tree_[kColorThemeTypeDark].Insert("s_waitcnt", kIsaDarkThemeColorPink);
-    prefix_tree_[kColorThemeTypeDark].Insert("expcnt", kIsaDarkThemeColorPink);
-    prefix_tree_[kColorThemeTypeDark].Insert("vmcnt", kIsaDarkThemeColorPink);
-    prefix_tree_[kColorThemeTypeDark].Insert("lgkmcnt", kIsaDarkThemeColorPink);
-    prefix_tree_[kColorThemeTypeDark].Insert("s_swap", kIsaDarkThemeColorRed);
-    prefix_tree_[kColorThemeTypeDark].Insert("s_branch", kIsaDarkThemeColorRed);
-    prefix_tree_[kColorThemeTypeDark].Insert("s_cbranch", kIsaDarkThemeColorRed);
-    prefix_tree_[kColorThemeTypeDark].Insert("s_setpc", kIsaDarkThemeColorRed);
-    prefix_tree_[kColorThemeTypeDark].Insert("ds_", kIsaDarkThemeColorBlue);
-    prefix_tree_[kColorThemeTypeDark].Insert("buffer_", kIsaDarkThemeColorPurple);
-    prefix_tree_[kColorThemeTypeDark].Insert("tbuffer_", kIsaDarkThemeColorPurple);
-    prefix_tree_[kColorThemeTypeDark].Insert("image_", kIsaDarkThemeColorPurple);
-    prefix_tree_[kColorThemeTypeDark].Insert("global_load", kIsaDarkThemeColorPurple);
-    prefix_tree_[kColorThemeTypeDark].Insert("idxen", kIsaDarkThemeColorPurple);
-    prefix_tree_[kColorThemeTypeDark].Insert("s_", kIsaDarkThemeColorBlue);
-    prefix_tree_[kColorThemeTypeDark].Insert("s[", kIsaDarkThemeColorBlue);  // Scalar register.
-    prefix_tree_[kColorThemeTypeDark].Insert("[s", kIsaDarkThemeColorBlue);  // Scalar register range.
-    prefix_tree_[kColorThemeTypeDark].Insert("|s", kIsaDarkThemeColorBlue);  // Scalar register absolute value.
-    prefix_tree_[kColorThemeTypeDark].Insert("-s", kIsaDarkThemeColorBlue);  // Scalar register negative value.
-    prefix_tree_[kColorThemeTypeDark].Insert("v_", kIsaDarkThemeColorLightGreen);
-    prefix_tree_[kColorThemeTypeDark].Insert("v[", kIsaDarkThemeColorLightGreen);  // Vector register.
-    prefix_tree_[kColorThemeTypeDark].Insert("[v", kIsaDarkThemeColorLightGreen);  // Vector register range.
-    prefix_tree_[kColorThemeTypeDark].Insert("|v", kIsaDarkThemeColorLightGreen);  // Vector register absolute value.
-    prefix_tree_[kColorThemeTypeDark].Insert("-v", kIsaDarkThemeColorLightGreen);  // Vector register negative value.
-    prefix_tree_[kColorThemeTypeDark].Insert("//", kIsaDarkThemeColorLightBlue);   // Comments.
-
-    for (size_t i = 0; i <= 9; ++i)
-    {
-        prefix_tree_[kColorThemeTypeDark].Insert("s" + std::to_string(i), kIsaDarkThemeColorBlue);
-        prefix_tree_[kColorThemeTypeDark].Insert("v" + std::to_string(i), kIsaDarkThemeColorLightGreen);
+        prefix_tree_.Insert(std::to_string(i), kIsaColorGrey);  // Numeric constants.
+        prefix_tree_.Insert("s" + std::to_string(i), kIsaColorGreyBlue);
+        prefix_tree_.Insert("v" + std::to_string(i), kIsaColorLightGreen);
     }
 }

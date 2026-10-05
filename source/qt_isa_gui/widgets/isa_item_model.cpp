@@ -59,7 +59,9 @@ namespace
                                                                                       {amdisa::GpuArchitecture::kCdna1, "amdgpu_isa_cdna1.xml"},
                                                                                       {amdisa::GpuArchitecture::kCdna2, "amdgpu_isa_cdna2.xml"},
                                                                                       {amdisa::GpuArchitecture::kCdna3, "amdgpu_isa_cdna3.xml"},
-                                                                                      {amdisa::GpuArchitecture::kCdna4, "amdgpu_isa_cdna4.xml"}};
+                                                                                      {amdisa::GpuArchitecture::kCdna4, "amdgpu_isa_cdna4.xml"},
+                                                                                      {amdisa::GpuArchitecture::kCdna5, "amdgpu_isa_cdna5.xml"},
+    };
 
     // Avoid repetitive string conversions.
     const std::string kOperandTokenSpaceStdString = IsaItemModel::kOperandTokenSpace.toStdString();
@@ -230,9 +232,7 @@ QVariant IsaItemModel::data(const QModelIndex& index, int role) const
         if (row_type == RowType::kComment && index.column() != kLineNumber)
         {
             // This is a child or parent comment; provide light blue as its text color.
-
-            const auto color_theme   = QtCommon::QtUtils::ColorTheme::Get().GetColorTheme();
-            const auto comment_color = (color_theme == kColorThemeTypeLight) ? kIsaLightThemeColorLightBlue : kIsaDarkThemeColorLightBlue;
+            const auto comment_color = kIsaColorLightBlue;
 
             data.setValue(comment_color);
         }
@@ -245,8 +245,7 @@ QVariant IsaItemModel::data(const QModelIndex& index, int role) const
 
             if (!isa_block->mapped_branch_instructions.empty())
             {
-                const auto color_theme = QtCommon::QtUtils::ColorTheme::Get().GetColorTheme();
-                const auto label_color = (color_theme == kColorThemeTypeLight) ? kIsaLightThemeColorDarkMagenta : kIsaDarkThemeColorDarkMagenta;
+                const auto label_color = kIsaColorMagenta;
 
                 data.setValue(label_color);
             }

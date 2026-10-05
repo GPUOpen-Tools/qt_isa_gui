@@ -20,6 +20,7 @@ target_include_directories(qt_isa_utility PUBLIC ${PROJECT_SOURCE_DIR}/source)
 
 target_link_libraries(qt_isa_utility PUBLIC
                                      Qt6::Gui
+                                     isa_decoder
                                      QtUtils)
 
 devtools_target_options(qt_isa_utility)

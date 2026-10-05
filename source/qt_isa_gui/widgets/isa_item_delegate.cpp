@@ -20,16 +20,23 @@
 
 #include "qt_isa_gui/utility/isa_dictionary.h"
 
+#include "amdisa/isa_decoder.h"
+
 #include "isa_item_model.h"
 #include "isa_tree_view.h"
 
 /// @brief Paint a token's text using a color based on its type or syntax.
 ///
 /// @param [in] token                The token to paint.
+/// @param [in] source_index         The source index of the token that is being painted.
 /// @param [in] token_rectangle      The rectangle to paint to.
 /// @param [in] painter              The painter.
 /// @param [in] color_coding_enabled True to apply a color coding to the token, false otherwise.
-static void PaintTokenText(const IsaItemModel::Token& token, const QRectF& token_rectangle, QPainter* painter, const bool color_coding_enabled)
+static void PaintTokenText(const IsaItemModel::Token&                 token,
+                           const amdisa::FunctionalGroupSubgroupInfo& functional_group_info,
+                           const QRectF&                              token_rectangle,
+                           QPainter*                                  painter,
+                           const bool                                 color_coding_enabled)
 {
     painter->save();
 
@@ -40,20 +47,12 @@ static void PaintTokenText(const IsaItemModel::Token& token, const QRectF& token
 
         if (token.type == IsaItemModel::TokenType::kBranchLabelType)
         {
-            QColor operand_color;
-            if (QtCommon::QtUtils::ColorTheme::Get().GetColorTheme() == kColorThemeTypeLight)
-            {
-                operand_color = kIsaLightThemeColorDarkMagenta;
-            }
-            else
-            {
-                operand_color = kIsaDarkThemeColorDarkMagenta;
-            }
+            QColor operand_color = kIsaColorMagenta;
 
             // Operand that is the target of a branch instruction.
             color = operand_color;
         }
-        else if (!IsaColorCodingDictionaryInstance::GetInstance().ShouldHighlight(token.token_text, color))
+        else if (!IsaColorCodingDictionaryInstance::GetInstance().ShouldHighlight(token.token_text, functional_group_info, color))
         {
             color = pen.color();
         }
@@ -757,7 +756,7 @@ void IsaItemDelegate::PaintTokenHighlight(const IsaItemModel::Token& token,
     }
 
     // Use the same color for light and dark mode.
-    const auto token_highlight_color = kIsaLightThemeColorLightPink;
+    const auto token_highlight_color = kIsaColorLightPink;
 
     if (is_token_selected)
     {
@@ -830,7 +829,10 @@ void IsaItemDelegate::PaintText(QPainter* painter, const QModelIndex& source_ind
                                 source_index.row(),
                                 0);  // Assume 0 index for op code.
 
-            PaintTokenText(op_code_token.front(), paint_rectangle, painter, color_coding_enabled);
+            const amdisa::InstructionInfo& instruction_info = source_index.data(IsaItemModel::UserRoles::kDecodedIsa).value<amdisa::InstructionInfo>();
+            const amdisa::FunctionalGroupSubgroupInfo& functional_group_info = instruction_info.functional_group_subgroup_info;
+
+            PaintTokenText(op_code_token.front(), functional_group_info, paint_rectangle, painter, color_coding_enabled);
         }
         else if ((source_index.column() == IsaItemModel::kOperands) && (source_index.parent().isValid()))
         {
@@ -852,6 +854,9 @@ void IsaItemDelegate::PaintOperands(QPainter* painter, const QModelIndex& source
 
     const QFontMetricsF font_metrics(view_->font(), view_);
 
+    // Pass an empty functional group info struct for operands.
+    amdisa::FunctionalGroupSubgroupInfo functional_group_info{};
+
     // Iterate over operands.
     for (size_t i = 0; i < operand_groups_tokens.size(); i++)
     {
@@ -870,7 +875,7 @@ void IsaItemDelegate::PaintOperands(QPainter* painter, const QModelIndex& source
 
             // Paint a color coded operand token.
             const bool color_coding_enabled = source_index.data(IsaItemModel::kLineEnabledRole).toBool();
-            PaintTokenText(token, paint_rectangle, painter, color_coding_enabled);
+            PaintTokenText(token, functional_group_info, paint_rectangle, painter, color_coding_enabled);
 
             // Re-use color and draw a line underneath tokens that are the target of a branch instruction.
             if (token.type == IsaItemModel::TokenType::kBranchLabelType)

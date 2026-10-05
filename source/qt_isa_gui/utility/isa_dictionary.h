@@ -8,6 +8,8 @@
 #ifndef QTISAGUI_UTILITY_ISA_DICTIONARY_H_
 #define QTISAGUI_UTILITY_ISA_DICTIONARY_H_
 
+#include <array>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -17,29 +19,63 @@
 
 #include "qt_common/utils/common_definitions.h"
 
-// Light Theme Colors.
-static const QColor kIsaLightThemeColorLightOrange    = QColor(255, 128, 0);         ///< Light orange.
-static const QColor kIsaLightThemeColorPink           = QColor(255, 0, 128);         ///< Pink.
-static const QColor kIsaLightThemeColorLightPink      = QColor(255, 142, 255, 200);  ///< Light pink.
-static const QColor kIsaLightThemeColorLightLightPink = QColor(255, 200, 255, 200);  ///< Light light pink.
-static const QColor kIsaLightThemeColorRed            = QColor(255, 0, 0);           ///< Red.
-static const QColor kIsaLightThemeColorBlue           = QColor(0, 0, 255);           ///< Blue.
-static const QColor kIsaLightThemeColorLightBlue      = QColor(0, 128, 213);         ///< Light blue.
-static const QColor kIsaLightThemeColorLightGreen     = QColor(0, 128, 0);           ///< Light green.
-static const QColor kIsaLightThemeColorPurple         = QColor(128, 0, 255);         ///< Purple.
-static const QColor kIsaLightThemeColorDarkMagenta    = Qt::darkMagenta;             ///< Dark magenta.
+#include "amdisa/isa_decoder.h"
 
-// Dark theme colors.
-static const QColor kIsaDarkThemeColorLightOrange    = QColor(255, 128, 0);         ///< Light orange.
-static const QColor kIsaDarkThemeColorPink           = QColor(240, 64, 128);        ///< Pink.
-static const QColor kIsaDarkThemeColorDarkDarkPurple = QColor(60, 0, 60, 200);      ///< Dark dark purple.
-static const QColor kIsaDarkThemeColorLightLightPink = QColor(240, 200, 240, 200);  ///< Light light pink.
-static const QColor kIsaDarkThemeColorRed            = QColor(240, 64, 64);         ///< Red.
-static const QColor kIsaDarkThemeColorBlue           = QColor(64, 96, 220);         ///< Blue.
-static const QColor kIsaDarkThemeColorLightBlue      = QColor(64, 164, 212);        ///< Light blue.
-static const QColor kIsaDarkThemeColorLightGreen     = QColor(32, 142, 32);         ///< Light green.
-static const QColor kIsaDarkThemeColorPurple         = QColor(164, 64, 240);        ///< Purple.
-static const QColor kIsaDarkThemeColorDarkMagenta    = QColor(142, 64, 142);        ///< Dark magenta.
+static const int kFunctionalGroupCount    = 10;
+static const int kFunctionalSubgroupCount = 15;
+
+// Color groups used to categorize the functional groups for color coding.
+enum IsaColorGroup
+{
+    kIsaColorGroupUnknown,
+    kIsaColorGroupScalarAlu,
+    kIsaColorGroupScalarMemory,
+    kIsaColorGroupVectorAlu,
+    kIsaColorGroupVectorMemory,
+    kIsaColorGroupBranch,
+    kIsaColorGroupOther,
+    kIsaColorGroupCount
+};
+
+// Map functional groups in the isa decoder to their respective color groups.
+static const std::array<IsaColorGroup, kFunctionalGroupCount> kFunctionalGroupToColorGroup = {
+    kIsaColorGroupUnknown,       // kFunctionalGroupUnknown
+    kIsaColorGroupScalarAlu,     // kFunctionalGroupSalu
+    kIsaColorGroupScalarMemory,  // kFunctionalGroupSmem
+    kIsaColorGroupVectorAlu,     // kFunctionalGroupValu
+    kIsaColorGroupVectorMemory,  // kFunctionalGroupVmem
+    kIsaColorGroupOther,         // kFunctionalGroupExport
+    kIsaColorGroupBranch,        // kFunctionalGroupBranch
+    kIsaColorGroupOther,         // kFunctionalGroupMessages
+    kIsaColorGroupOther,         // kFunctionalGroupWaveControl
+    kIsaColorGroupOther,         // kFunctionalGroupTrap
+};
+
+static const QColor kIsaColorBlue       = QColor(56, 80, 240);    ///< Blue.
+static const QColor kIsaColorGreyBlue   = QColor(90, 110, 230);   ///< Grey Blue.
+static const QColor kIsaColorLightBlue  = QColor(42, 142, 212);   ///< Light blue.
+static const QColor kIsaColorDarkGreen  = QColor(20, 128, 20);    ///< Dark green.
+static const QColor kIsaColorLightGreen = QColor(64, 164, 92);    ///< Light green.
+static const QColor kIsaColorMagenta    = QColor(142, 64, 142);   ///< Magenta.
+static const QColor kIsaColorPurple     = QColor(124, 90, 150);   ///< Purple.
+static const QColor kIsaColorLightRed   = QColor(240, 80, 160);   ///< light Red.
+static const QColor kIsaColorRed        = QColor(240, 40, 40);    ///< Red.
+static const QColor kIsaColorDarkRed    = QColor(180, 0, 0);      ///< Dark Red.
+static const QColor kIsaColorOrange     = QColor(255, 128, 0);    ///< Orange.
+static const QColor kIsaColorLightPink  = QColor(255, 160, 255);  ///< Light pink.
+static const QColor kIsaColorPink       = QColor(240, 64, 128);   ///< Pink.
+static const QColor kIsaColorGrey       = QColor(128, 128, 128);  ///< Grey.
+
+// Map of IsaColorGroups and subgroups to their respective colors.
+static const std::map<std::pair<IsaColorGroup, amdisa::FunctionalSubgroups>, QColor> kFunctionalSubgroupColorMap = {
+    std::pair{std::pair{kIsaColorGroupUnknown, amdisa::FunctionalSubgroups::kFunctionalSubgroupUnknown}, Qt::gray},
+    std::pair{std::pair{kIsaColorGroupScalarAlu, amdisa::FunctionalSubgroups::kFunctionalSubgroupUnknown}, kIsaColorBlue},
+    std::pair{std::pair{kIsaColorGroupScalarMemory, amdisa::FunctionalSubgroups::kFunctionalSubgroupUnknown}, kIsaColorLightRed},
+    std::pair{std::pair{kIsaColorGroupVectorMemory, amdisa::FunctionalSubgroups::kFunctionalSubgroupUnknown}, kIsaColorRed},
+    std::pair{std::pair{kIsaColorGroupVectorMemory, amdisa::FunctionalSubgroups::kFunctionalSubgroupBvh}, kIsaColorDarkRed},
+    std::pair{std::pair{kIsaColorGroupVectorAlu, amdisa::FunctionalSubgroups::kFunctionalSubgroupUnknown}, kIsaColorDarkGreen},
+    std::pair{std::pair{kIsaColorGroupBranch, amdisa::FunctionalSubgroups::kFunctionalSubgroupUnknown}, kIsaColorPurple},
+    std::pair{std::pair{kIsaColorGroupOther, amdisa::FunctionalSubgroups::kFunctionalSubgroupUnknown}, Qt::gray}};
 
 /// @brief Class defining a prefix tree node.
 template <typename UserType>
@@ -247,12 +283,16 @@ public:
     static IsaColorCodingDictionaryInstance& GetInstance();
 
     /// @brief Should the input string be highlighted, if so, record its color info.
+    /// 
+    /// For opcodes, check the functional group. For operands, functional group info is empty. 
+    /// Check the prefix of the operands to determine if it should be highlighted and what color it should be highlighted with.
     ///
-    /// @param [in] str   The input string.
-    /// @param [in] color The color info that the string should be highlighted with.
+    /// @param [in] str                   The input string.
+    /// @param [in] functional_group_info The functional group and subgroup information.
+    /// @param [out] color                The color info that the string should be highlighted with.
     ///
     /// @return true if the string should be highlighted.
-    bool ShouldHighlight(const std::string& str, QColor& color) const;
+    bool ShouldHighlight(const std::string& str, const amdisa::FunctionalGroupSubgroupInfo& functional_group_info, QColor& color) const;
 
 private:
     /// @brief Constructor.
@@ -267,7 +307,7 @@ private:
     /// @brief Disable assignment operator.
     IsaColorCodingDictionaryInstance& operator=(const IsaColorCodingDictionaryInstance&) = delete;
 
-    PrefixTree<QColor> prefix_tree_[kColorThemeTypeCount];  ///< The prefix tree that is used as a dictionary to decide the coloring profile.
+    PrefixTree<QColor> prefix_tree_;  ///< The prefix tree that is used as a dictionary to decide the coloring profile.
 };
 
 #endif  // QTISAGUI_UTILITY_ISA_DICTIONARY_H_

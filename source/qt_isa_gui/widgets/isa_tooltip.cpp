@@ -80,7 +80,7 @@ void IsaTooltip::UpdateText(const amdisa::InstructionInfo& decoded_info)
 
     // Color code the op code.
     QColor op_code_color;
-    IsaColorCodingDictionaryInstance::GetInstance().ShouldHighlight(op_code, op_code_color);
+    IsaColorCodingDictionaryInstance::GetInstance().ShouldHighlight(op_code, decoded_info.functional_group_subgroup_info, op_code_color);
 
     const auto    r_g_b             = QString("rgb(%1, %2, %3)").arg(op_code_color.red()).arg(op_code_color.green()).arg(op_code_color.blue());
     const QString rich_text_op_code = QString("<font style='color:%1'>" + QString(op_code.c_str())).arg(r_g_b) + "</font> (" + functional_group_name + ")";

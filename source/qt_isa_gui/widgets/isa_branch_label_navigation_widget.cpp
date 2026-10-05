@@ -23,10 +23,10 @@ static void InitQtIsaGuiResources()
 namespace
 {
     const QString button_style =
-        "QPushButton         { border: 1px solid gray; background: palette(button); }"
-        "QPushButton:hover   { background-color: rgba(0,0,0,0.08);                  }"
-        "QPushButton:pressed { background-color: rgba(0,0,0,0.20);                  }";
-
+        "QPushButton:enabled  { border: 1px solid palette(text); background: palette(button); }"
+        "QPushButton:disabled { border: 1px solid gray; background: palette(button);          }"
+        "QPushButton:hover    { background-color: palette(alternate-base);                    }"
+        "QPushButton:pressed  { background-color: gray;                                       }";
 }
 
 IsaBranchLabelNavigationWidget::IsaBranchLabelNavigationWidget(QWidget* parent)
@@ -40,13 +40,13 @@ IsaBranchLabelNavigationWidget::IsaBranchLabelNavigationWidget(QWidget* parent)
     next_button_                = new QPushButton(this);
 
     previous_button_->setStyleSheet(button_style);
-    previous_button_->setIconSize(QSize(17, 17));
-    previous_button_->setFixedSize(19, 19);
+    previous_button_->setIconSize(QSize(20, 18));
+    previous_button_->setFixedSize(20, 20);
     previous_button_->setCursor(Qt::PointingHandCursor);
 
     next_button_->setStyleSheet(button_style);
-    next_button_->setIconSize(QSize(17, 17));
-    next_button_->setFixedSize(19, 19);
+    next_button_->setIconSize(QSize(20, 18));
+    next_button_->setFixedSize(20, 20);
     next_button_->setCursor(Qt::PointingHandCursor);
 
     layout_ = new QHBoxLayout(this);

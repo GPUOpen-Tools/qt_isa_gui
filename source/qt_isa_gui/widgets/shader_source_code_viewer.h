@@ -81,7 +81,7 @@ public:
     /// @brief Scroll the editor to the given line number.
     ///
     /// @param [in] line_number The line number to scroll to.
-    void ScrollToLine(int line_number);
+    virtual void ScrollToLine(int line_number);
 
     /// @brief Sets the contents of the source code view.
     ///
@@ -114,7 +114,10 @@ public slots:
     /// @brief Lines in the disassembly view were highlighted. Apply a colored highlight to the background of each given row in the source code. Don't notify the disassembly view.
     ///
     /// @param [in] line_indices The list of line indices to highlight.
-    void HandleHighlightedLinesSet(const QList<int>& line_indices);
+    virtual void HandleHighlightedLinesSet(const QList<int>& line_indices);
+
+    /// @brief Update left margin based on current line number area width.
+    virtual void UpdateLineNumberAreaWidth();
 
 signals:
     /// @brief A signal emitted when the source editor is hidden.
@@ -135,6 +138,15 @@ protected slots:
     ///
     /// @param [in] location The location where the context menu should be displayed.
     virtual void ShowContextMenu(const QPoint& location);
+
+    /// @brief Scroll the line number area or request it to repaint itself.
+    ///
+    /// @param [in] rect The rectangle to refresh if no dy is provided.
+    /// @param [in] dy   Scroll delta to apply to the line number area.
+    virtual void UpdateLineNumberArea(const QRect& rect, const int dy);
+
+    /// @brief Update cursor position assuming no correlation.
+    virtual void UpdateCursorPosition();
 
 protected:
     /// @brief An overridden paint handler responsible for painting a blinking cursor when the editor doesn't have focus.
@@ -210,18 +222,6 @@ protected:
 private slots:
     /// @brief Toggle internal cursor visibility state and request repaint.
     void HandleToggleCursorVisibility();
-
-    /// @brief Update left margin based on current line number area width.
-    void UpdateLineNumberAreaWidth();
-
-    /// @brief Update cursor position assuming no correlation.
-    void UpdateCursorPosition();
-
-    /// @brief Scroll the line number area or request it to repaint itself.
-    ///
-    /// @param [in] rect The rectangle to refresh if no dy is provided.
-    /// @param [in] dy   Scroll delta to apply to the line number area.
-    void UpdateLineNumberArea(const QRect& rect, const int dy);
 };
 
 /// @brief A widget used to paint the line number gutter in the source editor.

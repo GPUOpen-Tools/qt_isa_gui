@@ -26,11 +26,11 @@ static void InitQtIsaGuiResources()
 namespace
 {
     const QString button_style =
-        "QPushButton         { border: 1px solid gray; background: palette(button); }"
-        "QPushButton:hover   { background-color: rgba(0,0,0,0.08);                  }"
-        "QPushButton:pressed { background-color: rgba(0,0,0,0.20);                  }"
-        "QPushButton:checked { background-color: palette(highlight);                }";
-}
+        "QPushButton         { border: 1px solid palette(text); background: palette(button); }"
+        "QPushButton:hover   { background-color: palette(alternate-base);                    }"
+        "QPushButton:pressed { background-color: gray;                                       }"
+        "QPushButton:checked { background-color: palette(highlight);                         }";
+}  // namespace
 
 FindTextWidget::FindTextWidget(QWidget* parent)
     : QWidget(parent)
@@ -52,13 +52,13 @@ FindTextWidget::FindTextWidget(QWidget* parent)
     ui_->find_next_->setStyleSheet(button_style);
     ui_->match_case_->setStyleSheet(button_style);
 
-    ui_->find_previous_->setIconSize(QSize(17, 17));
-    ui_->find_next_->setIconSize(QSize(17, 17));
-    ui_->match_case_->setIconSize(QSize(17, 17));
+    ui_->find_previous_->setIconSize(QSize(20, 18));
+    ui_->find_next_->setIconSize(QSize(20, 18));
+    ui_->match_case_->setIconSize(QSize(18, 18));
 
-    ui_->find_previous_->setFixedSize(19, 19);
-    ui_->find_next_->setFixedSize(19, 19);
-    ui_->match_case_->setFixedSize(19, 19);
+    ui_->find_previous_->setFixedSize(20, 20);
+    ui_->find_next_->setFixedSize(20, 20);
+    ui_->match_case_->setFixedSize(20, 20);
 
     if (color_theme == kColorThemeTypeDark)
     {
