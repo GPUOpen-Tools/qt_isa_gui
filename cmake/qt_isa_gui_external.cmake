@@ -6,8 +6,8 @@
 include(FetchContent)
 
 set (GITHUB_REPO_PREFIX "https://github.com/GPUOpen-Tools")
-set (QT_COMMON_BRANCH "v4.5.0")
-set (ISA_SPEC_MANAGER_BRANCH "v1.3.0")
+set (QT_COMMON_BRANCH "a7552266363c29e902ad605a3da8a7368cdb7540")
+set (ISA_SPEC_MANAGER_BRANCH "512971f75854ef8496d5acbd5576ad5d082cdcb3")
 
 if (NOT TARGET QtCustomWidgets AND NOT TARGET QtUtils)
     if (NOT QTCOMMON_DIR)
